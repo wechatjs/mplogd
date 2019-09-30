@@ -1,11 +1,11 @@
 {
   "name": "@tencent/mplogd",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Mplogd is intended to target user issues by storing opertion logs in indexedDB.",
   "main": "index.js",
   "scripts": {
     "build": "rollup -c",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "pub": "npm run build && tnpm publish"
   },
   "keywords": [
     "front-end log",
@@ -13,13 +13,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+http://git.code.oa.com/dididong/mplogd.git"
+    "url": "http://git.code.oa.com/dididong/mplogd.git"
+  },
+  "bugs": {
+    "url": "https://git.code.oa.com/dididong/mplogd/issues"
   },
   "author": "dididong",
   "license": "ISC",
   "devDependencies": {
-    "@types/mocha": "^5.2.7",
-    "mocha": "^6.2.0",
     "rollup": "^1.22.0",
     "rollup-plugin-json": "^4.0.0",
     "rollup-plugin-replace": "^2.2.0",
