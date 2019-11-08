@@ -76,10 +76,10 @@
       return parseInt(timeStamp);
   }
 
-  var g = {
-      defaultDbName: "mplog",
-      defaultDbStoreName: 'logs'
-  };
+  /**
+   * @author dididong
+   * @description 使用indexedDB进行浏览器端存储
+   */
   var TransactionType = {
       /**
        * 支持读写
@@ -99,12 +99,8 @@
           this.maxRetryCount = 3;
           this.currentRetryCount = 0;
           this.retryInterval = 6000;
-          // 数据库名称,如果不是写日志，还是新建一个数据库好，不然打开同一个版本数据库时，很可能导致另外的store不能增删改结构
           this.DB_NAME = config && config.dbName ? config.dbName : this.defaultDbName;
-          // 数据库表名， 
-          this.DB_STORE_NAME = config && config.dbStoreName ? config.dbStoreName : g.defaultDbStoreName;
-          // 数据库版本。只能增加。如果没有修改数据库名称，但是想要新建，删除，更新store, 版本号要在这里改动
-          // 如果修改了版本号，灰度了又回退，一定要再修改一次版本号，不然会open时会报错
+          this.DB_STORE_NAME = config && config.dbStoreName ? config.dbStoreName : this.defaultDbStoreName;
           this.DB_VERSION = config && typeof config.dbVersion !== 'undefined' ? config.dbVersion : 1;
           this.indexedDB = window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB || window.msIndexedDB;
           this.onupgradeneeded = config && config.onupgradeneeded ? config.onupgradeneeded : null;
@@ -120,7 +116,6 @@
               console.log('Mplog createDB failed');
           }
       };
-      // 创建数据库
       MPIndexedDB.prototype.createDB = function () {
           var _this = this;
           if (!this.indexedDB) {
@@ -152,8 +147,6 @@
                   }
                   errLvl = ErrorLevel.fatal; // 致命错误
                   _this.dbStatus = DB_Status.FAILED;
-                  // this.currentRetryCount = 2;
-                  // this.currentRetryCount = this.maxRetryCount + 1; // 不需要重试了
               }
               _this.throwError(errLvl, 'indexedDB open error, message:', e.target.error);
           };
@@ -178,18 +171,16 @@
               catch (e) {
                   _this.throwError(ErrorLevel.fatal, 'consume pool error', e);
               }
-              if (_this.DB_NAME === g.defaultDbName && _this.DB_STORE_NAME === g.defaultDbStoreName) {
-                  setTimeout(function () {
-                      if (_this.dbStatus !== DB_Status.INITED) {
-                          _this.poolHandler.push(function () {
-                              return _this.keep(7);
-                          });
-                      }
-                      else {
-                          _this.keep(7); // 保留7天数据
-                      }
-                  }, 1000);
-              }
+              setTimeout(function () {
+                  if (_this.dbStatus !== DB_Status.INITED) {
+                      _this.poolHandler.push(function () {
+                          return _this.keep(7);
+                      });
+                  }
+                  else {
+                      _this.keep(7); // 保留7天数据
+                  }
+              }, 1000);
           };
           request.onblocked = function () {
               _this.throwError(ErrorLevel.serious, 'indexedDB is blocked');
@@ -197,47 +188,25 @@
           request.onupgradeneeded = function (e) {
               _this.db = e.target.result;
               try {
-                  if (_this.DB_NAME === g.defaultDbName && _this.DB_STORE_NAME === g.defaultDbStoreName) {
-                      if (!_this.db.objectStoreNames.contains(_this.DB_STORE_NAME)) { // 没有store则创建
-                          var objectStore = _this.db.createObjectStore(_this.DB_STORE_NAME, {
-                              autoIncrement: true
-                          });
-                          objectStore.createIndex('location', 'location', {
-                              unique: false
-                          });
-                          objectStore.createIndex('level', 'level', {
-                              unique: false
-                          });
-                          objectStore.createIndex('description', 'description', {
-                              unique: false
-                          });
-                          objectStore.createIndex('data', 'data', {
-                              unique: false
-                          });
-                          objectStore.createIndex('timestamp', 'timestamp', {
-                              unique: false
-                          });
-                      }
-                      else if (e.oldVersion < 3) { // 旧版本，需要更新数据，新增时间戳字段和索引
-                          var store = e.target.transaction.objectStore(_this.DB_STORE_NAME);
-                          store.createIndex('timestamp', 'timestamp', {
-                              unique: false
-                          });
-                          store.openCursor().onsuccess = function (event) {
-                              var cursor = event.target.result;
-                              if (cursor) {
-                                  cursor.update({
-                                      time: cursor.value.time,
-                                      level: cursor.value.level,
-                                      location: cursor.value.location,
-                                      description: cursor.value.description,
-                                      data: cursor.value.data,
-                                      timestamp: (new Date(cursor.value.time)).getTime()
-                                  });
-                                  cursor["continue"]();
-                              }
-                          };
-                      }
+                  if (!_this.db.objectStoreNames.contains(_this.DB_STORE_NAME)) { // 没有store则创建
+                      var objectStore = _this.db.createObjectStore(_this.DB_STORE_NAME, {
+                          autoIncrement: true
+                      });
+                      objectStore.createIndex('location', 'location', {
+                          unique: false
+                      });
+                      objectStore.createIndex('level', 'level', {
+                          unique: false
+                      });
+                      objectStore.createIndex('description', 'description', {
+                          unique: false
+                      });
+                      objectStore.createIndex('data', 'data', {
+                          unique: false
+                      });
+                      objectStore.createIndex('timestamp', 'timestamp', {
+                          unique: false
+                      });
                   }
                   if (typeof _this.onupgradeneeded === 'function') {
                       _this.onupgradeneeded(e);
@@ -296,15 +265,12 @@
               request = store.put(item);
               request.onsuccess = function () { };
               request.onerror = function (e) {
+                  _this.checkDB(e);
                   return _this.throwError(ErrorLevel.normal, 'add log failed', e.target.error);
               };
           }
       };
       MPIndexedDB.prototype.get = function (from, to, dealFc) {
-          if (this.DB_NAME !== g.defaultDbName || this.DB_STORE_NAME !== g.defaultDbStoreName) {
-              // 不是默认数据库不执行
-              return false;
-          }
           var transaction = this.getTransaction(TransactionType.READ_ONLY);
           if (transaction === null) {
               this.throwError(ErrorLevel.fatal, 'transaction is null');
@@ -355,10 +321,6 @@
       };
       MPIndexedDB.prototype.keep = function (saveDays) {
           var _this = this;
-          if (this.DB_NAME !== g.defaultDbName || this.DB_STORE_NAME !== g.defaultDbStoreName) {
-              // 不是默认数据库不执行
-              return;
-          }
           var transaction = this.getTransaction(TransactionType.READ_WRITE);
           if (transaction === null) {
               this.throwError(ErrorLevel.fatal, 'transaction is null');
@@ -422,6 +384,10 @@
       return MPIndexedDB;
   }());
 
+  /**
+   * @author dididong
+   * @description 管理增删改查任务
+   */
   var PoolHandler = /** @class */ (function () {
       function PoolHandler() {
           this.poolSize = 100;
@@ -442,21 +408,15 @@
       return PoolHandler;
   }());
 
+  /**
+   * @author dididong
+   * @description 实际进行日志操作
+   */
   var LogController = /** @class */ (function () {
       function LogController(config) {
-          this.defaultAjaxFilter = null;
           this.bufferLog = [];
-          // 是否自动记录错误信息
-          this.autoLogError = config && typeof config.autoLogError !== 'undefined' ? config.autoLogError : false;
-          // 是否自动记录promise错误
-          this.autoLogRejection = config && typeof config.autoLogRejection !== 'undefined' ? config.autoLogRejection : false;
-          // 是否自动记录AJAX请求
-          this.autoLogAjax = config && typeof config.autoLogAjax !== 'undefined' ? config.autoLogAjax : false;
-          this.logAjaxFilter = config && config.logAjaxFilter && config.logAjaxFilter ? config.logAjaxFilter : this.defaultAjaxFilter;
-          // 最大允许错误数
-          this.maxErrorNum = config && config.maxErrorNum ? config.maxErrorNum : 3;
           // 缓存记录的大小
-          this.bufferSize = config && typeof config.bufferSize !== 'undefined' ? config.bufferSize * 1 : 3;
+          this.bufferSize = config && typeof config.bufferSize !== 'undefined' ? config.bufferSize * 1 : 10;
           this.poolHandler = new PoolHandler();
           this.mpIndexedDB = new MPIndexedDB(config, this.poolHandler);
       }
@@ -535,6 +495,10 @@
       return LogController;
   }());
 
+  /**
+   * @author dididong
+   * @description 日志处理入口类
+   */
   var Mplogd = /** @class */ (function () {
       function Mplogd(config) {
           this.defaultAjaxFilter = null;

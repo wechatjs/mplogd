@@ -1,21 +1,13 @@
+/**
+ * @author dididong
+ * @description 实际进行日志操作
+ */
 import { MplogConfig, DB_Status} from '../util/config';
 import * as Util  from '../util/util';
 import { MPIndexedDB } from '../database/indexedDB';
 import { PoolHandler } from '../controller/pool_handler';
 
 export class LogController {
-  public autoLogError: boolean;
-
-  public autoLogRejection: boolean;
-
-  public autoLogAjax: boolean;
-
-  public logAjaxFilter: Function | null;
-
-  public defaultAjaxFilter = null;
-
-  public maxErrorNum: number;
-
   public bufferSize: number;
 
   private bufferLog: Array<any> = [];
@@ -25,18 +17,8 @@ export class LogController {
   private poolHandler: PoolHandler;
 
   constructor(config: MplogConfig) {
-    // 是否自动记录错误信息
-    this.autoLogError = config && typeof config.autoLogError !== 'undefined' ? config.autoLogError : false;
-    // 是否自动记录promise错误
-    this.autoLogRejection = config && typeof config.autoLogRejection !== 'undefined' ? config.autoLogRejection : false;
-     // 是否自动记录AJAX请求
-    this.autoLogAjax = config && typeof config.autoLogAjax !== 'undefined' ? config.autoLogAjax : false;
-
-    this.logAjaxFilter = config && config.logAjaxFilter && config.logAjaxFilter ? config.logAjaxFilter : this.defaultAjaxFilter;
-    // 最大允许错误数
-    this.maxErrorNum = config && config.maxErrorNum ? config.maxErrorNum : 3;
     // 缓存记录的大小
-    this.bufferSize = config && typeof config.bufferSize !== 'undefined' ? config.bufferSize * 1 : 3;
+    this.bufferSize = config && typeof config.bufferSize !== 'undefined' ? config.bufferSize * 1 : 10;
     
     this.poolHandler = new PoolHandler();
 

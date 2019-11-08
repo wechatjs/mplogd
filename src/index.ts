@@ -1,16 +1,26 @@
-
+/**
+ * @author dididong
+ * @description 日志处理入口类
+ */
 import { LogController } from './controller/log_controller';
 import { MplogConfig, LevelEnum} from './util/config';
 import * as Util  from './util/util';
 
 export default class Mplogd {
   private autoLogError: boolean;
+
   private autoLogRejection: boolean;
+
   private autoLogAjax: boolean;
+
   private logAjaxFilter: Function | null;
+
   private defaultAjaxFilter = null;
+
   private logController: LogController;
+
   private location: string;
+
   private xhrOpen = XMLHttpRequest.prototype.open;
   // xhr 原生 send 方法
   private xhrSend = XMLHttpRequest.prototype.send;
@@ -56,6 +66,7 @@ export default class Mplogd {
       const that = this;
       var lajaxMethod: string;
       var lajaxUrl: string;
+      
       XMLHttpRequest.prototype.open = function open(...args: any) {
         lajaxMethod = args[0];
         lajaxUrl = Util.resolveUrl(args[1]);

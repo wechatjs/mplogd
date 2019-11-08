@@ -1,10 +1,10 @@
+/**
+ * @author dididong
+ * @description 使用indexedDB进行浏览器端存储
+ */
 import { MplogConfig, DB_Status, ErrorLevel} from '../util/config';
 import { PoolHandler } from '../controller/pool_handler';
 import { formatDate } from '../util/util';
-const g = {
-  defaultDbName: `mplog`,
-  defaultDbStoreName: 'logs'
-}
 
 const TransactionType = {
   /**
@@ -17,32 +17,44 @@ const TransactionType = {
   'READ_ONLY': 'readonly'
 };
 
-
 export class MPIndexedDB {
   readonly defaultDbName = `mplog`;
+
   readonly defaultDbStoreName = 'logs';
-  private DB_NAME: string;
+
+  private DB_NAME: string; 
+
   private DB_STORE_NAME: string;
+
   private DB_VERSION: number;
+
   public dbStatus: string = DB_Status.INITING;
+
   public indexedDB: IDBFactory;
+
   private maxErrorNum : number;
+
   private currentErrorNum = 0;
+
   private maxRetryCount = 3;
+
   private currentRetryCount = 0;
+
   private db: any;
+
   public onupgradeneeded: Function | null;
+
   private timer: any;
+
   private retryInterval = 6000;
+  
   private poolHandler: PoolHandler;
 
   constructor(config: MplogConfig, poolHandler: PoolHandler) {
-    // 数据库名称,如果不是写日志，还是新建一个数据库好，不然打开同一个版本数据库时，很可能导致另外的store不能增删改结构
     this.DB_NAME = config && config.dbName ? config.dbName : this.defaultDbName;
-    // 数据库表名， 
-    this.DB_STORE_NAME = config && config.dbStoreName ? config.dbStoreName : g.defaultDbStoreName; 
-    // 数据库版本。只能增加。如果没有修改数据库名称，但是想要新建，删除，更新store, 版本号要在这里改动
-    // 如果修改了版本号，灰度了又回退，一定要再修改一次版本号，不然会open时会报错
+
+    this.DB_STORE_NAME = config && config.dbStoreName ? config.dbStoreName : this.defaultDbStoreName; 
+
     this.DB_VERSION = config && typeof config.dbVersion !== 'undefined' ? config.dbVersion : 1;
 
     this.indexedDB = window.indexedDB || (window as any).webkitIndexedDB || (window as any).mozIndexedDB || (window as any).msIndexedDB;
@@ -64,7 +76,6 @@ export class MPIndexedDB {
     }
   }
 
-  // 创建数据库
   private createDB(): void {
     if (!this.indexedDB) {
       this.throwError(ErrorLevel.serious, 'your browser not support IndexedDB.');
@@ -96,8 +107,6 @@ export class MPIndexedDB {
         } 
         errLvl = ErrorLevel.fatal; // 致命错误
         this.dbStatus = DB_Status.FAILED;
-        // this.currentRetryCount = 2;
-        // this.currentRetryCount = this.maxRetryCount + 1; // 不需要重试了
       }
       this.throwError(errLvl, 'indexedDB open error, message:', (<any>e.target).error);
     }
@@ -124,18 +133,15 @@ export class MPIndexedDB {
         this.throwError(ErrorLevel.fatal, 'consume pool error', e);
       }
       
-
-      if (this.DB_NAME === g.defaultDbName && this.DB_STORE_NAME === g.defaultDbStoreName) {
-        setTimeout(() => { // 1秒后清理默认store的过期数据
-          if (this.dbStatus !== DB_Status.INITED) {
-            this.poolHandler.push(() => {
-              return this.keep(7)
-            });
-          } else {
-            this.keep(7); // 保留7天数据
-          }
-        }, 1000);
-      }
+      setTimeout(() => { // 1秒后清理默认store的过期数据
+        if (this.dbStatus !== DB_Status.INITED) {
+          this.poolHandler.push(() => {
+            return this.keep(7)
+          });
+        } else {
+          this.keep(7); // 保留7天数据
+        }
+      }, 1000);
     };
 
     request.onblocked = () => {
@@ -145,54 +151,32 @@ export class MPIndexedDB {
     request.onupgradeneeded = (e: any) => {
       this.db = e.target.result;
       try {
-        if (this.DB_NAME === g.defaultDbName && this.DB_STORE_NAME === g.defaultDbStoreName) {
-          if (!this.db.objectStoreNames.contains(this.DB_STORE_NAME)) { // 没有store则创建
-            const objectStore = this.db.createObjectStore(this.DB_STORE_NAME, {
-              autoIncrement: true
-            });
-            objectStore.createIndex('location', 'location', {
-              unique: false
-            });
-            objectStore.createIndex('level', 'level', {
-              unique: false
-            });
-            objectStore.createIndex('description', 'description', {
-              unique: false
-            });
-            objectStore.createIndex('data', 'data', {
-              unique: false
-            });
-            objectStore.createIndex('timestamp', 'timestamp', {
-              unique: false
-            });
-          } else if (e.oldVersion < 3) { // 旧版本，需要更新数据，新增时间戳字段和索引
-            const store = e.target.transaction.objectStore(this.DB_STORE_NAME);
-            store.createIndex('timestamp', 'timestamp', { // 创建时间戳索引
-              unique: false
-            });
-            store.openCursor().onsuccess = (event: any) => {
-              const cursor = event.target.result;
-              if (cursor) {
-                cursor.update({ // 更新数据，新增时间戳字段
-                  time: cursor.value.time, // 时间字符串
-                  level: cursor.value.level, // 日志等级
-                  location: cursor.value.location, // 页面链接
-                  description: cursor.value.description, // 描述
-                  data: cursor.value.data, // 日志数据
-                  timestamp: (new Date(cursor.value.time)).getTime()
-                });
-                cursor.continue();
-              }
-            };
-          }
+        if (!this.db.objectStoreNames.contains(this.DB_STORE_NAME)) { // 没有store则创建
+          const objectStore = this.db.createObjectStore(this.DB_STORE_NAME, {
+            autoIncrement: true
+          });
+          objectStore.createIndex('location', 'location', {
+            unique: false
+          });
+          objectStore.createIndex('level', 'level', {
+            unique: false
+          });
+          objectStore.createIndex('description', 'description', {
+            unique: false
+          });
+          objectStore.createIndex('data', 'data', {
+            unique: false
+          });
+          objectStore.createIndex('timestamp', 'timestamp', {
+            unique: false
+          });
         }
 
         if (typeof this.onupgradeneeded === 'function') {
           this.onupgradeneeded(e);
         }
       } catch (event) {
-        
-        this.dbStatus =DB_Status.FAILED;
+        this.dbStatus = DB_Status.FAILED;
         this.throwError(ErrorLevel.fatal, 'indexedDB upgrade error', event);
       }
     }
@@ -230,7 +214,6 @@ export class MPIndexedDB {
         };
       }
     }
-
     return transaction;
   }
 
@@ -248,16 +231,13 @@ export class MPIndexedDB {
       request.onsuccess = () => {};
 
       request.onerror = (e) => {
+        this.checkDB(e);
         return this.throwError(ErrorLevel.normal, 'add log failed', (<any>e.target).error);
       };
     }
   }
 
   public get(from: Date, to: Date, dealFc: Function): any {
-    if (this.DB_NAME !== g.defaultDbName || this.DB_STORE_NAME !== g.defaultDbStoreName) {
-      // 不是默认数据库不执行
-      return false;
-    }
     const transaction = this.getTransaction(TransactionType.READ_ONLY);
     if (transaction === null) {
       this.throwError(ErrorLevel.fatal, 'transaction is null');
@@ -308,13 +288,7 @@ export class MPIndexedDB {
     };
   }
 
- 
-
   public keep(saveDays: number): void {
-    if (this.DB_NAME !== g.defaultDbName || this.DB_STORE_NAME !== g.defaultDbStoreName) {
-      // 不是默认数据库不执行
-      return;
-    }
     const transaction = this.getTransaction(TransactionType.READ_WRITE);
     if (transaction === null) {
       this.throwError(ErrorLevel.fatal, 'transaction is null');
