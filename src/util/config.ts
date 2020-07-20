@@ -20,6 +20,8 @@ export interface MplogConfig {
   bufferSize?: number;
   // 当前页面链接
   location?: string;
+  // 是否自动只保留7天数据
+  keep7Days?: boolean;
   
   onupgradeneeded?: Function | null;
 }
@@ -68,3 +70,5 @@ export const LevelEnum = {
    */
   error: 'error'
 };
+
+export const IgnoreCGIName = ['mplog', 'report', 'webcommreport'];

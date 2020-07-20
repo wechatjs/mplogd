@@ -3,7 +3,7 @@
  * @description 日志处理入口类
  */
 import { LogController } from './controller/log_controller';
-import { MplogConfig, LevelEnum} from './util/config';
+import { MplogConfig, LevelEnum, IgnoreCGIName} from './util/config';
 import * as Util  from './util/util';
 
 export default class Mplogd {
@@ -15,7 +15,9 @@ export default class Mplogd {
 
   private logAjaxFilter: Function | null;
 
-  private defaultAjaxFilter = null;
+  private defaultAjaxFilter = (ajaxUrl) => {
+    return IgnoreCGIName.indexOf(Util.getLocationCGIName(ajaxUrl)) === -1;
+  };
 
   private logController: LogController;
 
@@ -75,13 +77,15 @@ export default class Mplogd {
 
       XMLHttpRequest.prototype.send = function send(...args) {
         const startTime:number = new Date().getTime();
+        const ajaxRequestId = +new Date();
         if (that.logAjaxFilter && that.logAjaxFilter(lajaxUrl, lajaxMethod) || !that.logAjaxFilter) {
-          // 添加一条日志到缓存
-          that.info('[ajax] send: ' + lajaxMethod.toLowerCase() + '; request：' + lajaxUrl);
+          let requestMsg = `[ajax] id:${ajaxRequestId} request ${lajaxUrl} ${lajaxMethod}`;
+          lajaxMethod.toLowerCase() === 'post' ? that.info(requestMsg, args[0]) : that.info(requestMsg);
         }
 
         // 添加 readystatechange 事件
         this.addEventListener('readystatechange', function changeEvent() {
+          let infoMsg:string = '';
           // 排除掉用户自定义不需要记录日志的 ajax
           if (that.logAjaxFilter && that.logAjaxFilter(lajaxUrl, lajaxMethod) || !that.logAjaxFilter) {
             try {
@@ -89,22 +93,14 @@ export default class Mplogd {
                 const endTime:number = new Date().getTime();
                 // 请求耗时
                 const costTime = (endTime - startTime) / 1000;
-                if (this.status >= 200 && this.status < 400) {
-                  that.info('request succeed');
-                } else {
-                  that.info('request failed');
-                }
-                that.info('request cost：' + costTime + '; URL：' + lajaxUrl + '; request method:' + lajaxMethod);
-                if (lajaxMethod.toLowerCase() === 'post') {
-                  that.info('request data: ', args[0]);
+
+                if (this.status === 200) {
+                  that.info(`[ajax] id:${ajaxRequestId} response 200 ${lajaxUrl} ${costTime}`, this.responseText);
                 }
               }
             } catch (err) {
-              that.error('request failed！', err);
-              that.error('URL：' + lajaxUrl + ';request method：' + lajaxMethod + ',' + this.status);
-              if (lajaxMethod.toLowerCase() === 'post') {
-                that.error('request data', args[0]);
-              }
+              infoMsg = `[ajax] id:${ajaxRequestId} response ${this.status} ${lajaxUrl}`;
+              lajaxMethod.toLowerCase() === 'post' ? that.error(infoMsg, args[0]) : that.error(infoMsg);
             }
           }
         });
@@ -120,7 +116,7 @@ export default class Mplogd {
       } catch(e) {
         console.log(e);
       }
-      event.preventDefault();
+      return null; // 阻止弹框
     });
   }
 
@@ -136,8 +132,15 @@ export default class Mplogd {
     this.logController.log(this.location, LevelEnum.error, description, data);
   }
 
-  public get(from: Date, to: Date, dealFun: Function): any {
-    this.logController.get(from, to, dealFun);
+  /**
+   * 
+   * @param from 开始时间
+   * @param to 结束时间
+   * @param dealFun 处理最终返回结果的List(可选)
+   * @param successCb 处理查询成功的方法(可选)
+   */
+  public get(from: Date, to: Date, dealFun?: Function, successCb?: Function): any {
+    this.logController.get(from, to, dealFun, successCb);
   }
 
   public keep(saveDays: number) {

@@ -50,6 +50,8 @@ export class MPIndexedDB {
   
   private poolHandler: PoolHandler;
 
+  private keep7Days:boolean;
+
   constructor(config: MplogConfig, poolHandler: PoolHandler) {
     this.DB_NAME = config && config.dbName ? config.dbName : this.defaultDbName;
 
@@ -64,6 +66,8 @@ export class MPIndexedDB {
     this.maxErrorNum = config && config.maxErrorNum ? config.maxErrorNum : 3;
     
     this.poolHandler = poolHandler;
+
+    this.keep7Days = config && config.keep7Days ?  config.keep7Days : true;
 
     this.init();
   }
@@ -133,15 +137,17 @@ export class MPIndexedDB {
         this.throwError(ErrorLevel.fatal, 'consume pool error', e);
       }
       
-      setTimeout(() => { // 1秒后清理默认store的过期数据
-        if (this.dbStatus !== DB_Status.INITED) {
-          this.poolHandler.push(() => {
-            return this.keep(7)
-          });
-        } else {
-          this.keep(7); // 保留7天数据
-        }
-      }, 1000);
+      if (!!this.keep7Days) {
+        setTimeout(() => { // 1秒后清理默认store的过期数据
+          if (this.dbStatus !== DB_Status.INITED) {
+            this.poolHandler.push(() => {
+              return this.keep(7)
+            });
+          } else {
+            this.keep(7); // 保留7天数据
+          }
+        }, 1000);
+      }
     };
 
     request.onblocked = () => {
@@ -151,29 +157,29 @@ export class MPIndexedDB {
     request.onupgradeneeded = (e: any) => {
       this.db = e.target.result;
       try {
-        if (!this.db.objectStoreNames.contains(this.DB_STORE_NAME)) { // 没有store则创建
-          const objectStore = this.db.createObjectStore(this.DB_STORE_NAME, {
-            autoIncrement: true
-          });
-          objectStore.createIndex('location', 'location', {
-            unique: false
-          });
-          objectStore.createIndex('level', 'level', {
-            unique: false
-          });
-          objectStore.createIndex('description', 'description', {
-            unique: false
-          });
-          objectStore.createIndex('data', 'data', {
-            unique: false
-          });
-          objectStore.createIndex('timestamp', 'timestamp', {
-            unique: false
-          });
-        }
-
         if (typeof this.onupgradeneeded === 'function') {
           this.onupgradeneeded(e);
+        } else {
+          if (!this.db.objectStoreNames.contains(this.DB_STORE_NAME)) { // 没有store则创建
+            const objectStore = this.db.createObjectStore(this.DB_STORE_NAME, {
+              autoIncrement: true
+            });
+            objectStore.createIndex('location', 'location', {
+              unique: false
+            });
+            objectStore.createIndex('level', 'level', {
+              unique: false
+            });
+            objectStore.createIndex('description', 'description', {
+              unique: false
+            });
+            objectStore.createIndex('data', 'data', {
+              unique: false
+            });
+            objectStore.createIndex('timestamp', 'timestamp', {
+              unique: false
+            });
+          }
         }
       } catch (event) {
         this.dbStatus = DB_Status.FAILED;
@@ -237,8 +243,8 @@ export class MPIndexedDB {
     }
   }
 
-  public get(from: Date, to: Date, dealFc: Function): any {
-    const transaction = this.getTransaction(TransactionType.READ_ONLY);
+  public get(from: Date, to: Date, dealFc?: Function, successCb?: Function): any {
+    const transaction = this.getTransaction(TransactionType.READ_WRITE);
     if (transaction === null) {
       this.throwError(ErrorLevel.fatal, 'transaction is null');
       return false;
@@ -258,22 +264,28 @@ export class MPIndexedDB {
 
     const keyRange = IDBKeyRange.bound(fromTime, toTime); // from<=timestamp<=to
     const request = store.index('timestamp').openCursor(keyRange);
-    request.onsuccess = event => {
-      const cursor = (<any>event.target).result;
-      if (cursor) {
-        results.push({
-          time: cursor.value.time,
-          level: cursor.value.level,
-          location: cursor.value.location,
-          description: cursor.value.description,
-          data: cursor.value.data,
-          timestamp: cursor.value.timestamp
-        });
-        cursor.continue();
-      } else {
-        dealFc(results);
+    if (typeof successCb === 'function') {
+      request.onsuccess = event => {
+        successCb(event);
       }
-    };
+    } else if (typeof dealFc === 'function') {
+      request.onsuccess = event => {
+        const cursor = (<any>event.target).result;
+        if (cursor) {
+          results.push({
+            time: cursor.value.time,
+            level: cursor.value.level,
+            location: cursor.value.location,
+            description: cursor.value.description,
+            data: cursor.value.data,
+            timestamp: cursor.value.timestamp
+          });
+          cursor.continue();
+        } else {
+          dealFc(results);
+        }
+      }
+    }
     return true;
   }
 

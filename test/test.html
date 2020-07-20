@@ -81,7 +81,7 @@
     });
     document.querySelector('#btn6').addEventListener('click', function () {
         var xhr = new XMLHttpRequest();
-        xhr.open('GET', 'index.html');
+        xhr.open('GET', 'test.html');
         xhr.addEventListener('readystatechange', function () {
             if (xhr.readyState === XMLHttpRequest.DONE) {
                 console.log('Done1!');
@@ -120,10 +120,36 @@
         }
     });
     document.querySelector('#btn10').addEventListener('click', function () {
-      var dealFunc = (logs) => {
-        console.log(logs);
-      };
-      logger.get(new Date('2019-09-28').getTime(), new Date().getTime(), dealFunc);
+    //   var dealFunc = (logs) => {
+    //     console.log(logs);
+    //   };
+        var results = [];
+        var successCb = (event) => {
+            const cursor = event.target.result;
+            if (cursor) {
+                cursor.update({
+                    time: cursor.value.time,
+                    level: cursor.value.level,
+                    location: cursor.value.location,
+                    description: cursor.value.description,
+                    data: cursor.value.data,
+                    timestamp: cursor.value.timestamp,
+                    status: '未上传'
+                });
+                // results.push({
+                //     time: cursor.value.time,
+                //     level: cursor.value.level,
+                //     location: cursor.value.location,
+                //     description: cursor.value.description,
+                //     data: cursor.value.data,
+                //     timestamp: cursor.value.timestamp
+                // });
+                cursor.continue();
+            } else {
+                // console.log(results);
+            }
+        }
+        logger.get(new Date('2019-09-28').getTime(), new Date().getTime(), null, successCb);
     });
     document.querySelector('#btn11').addEventListener('click', function () {
       logger.keep(0);

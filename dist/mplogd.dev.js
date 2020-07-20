@@ -46,6 +46,7 @@
        */
       error: 'error'
   };
+  var IgnoreCGIName = ['mplog', 'report', 'webcommreport'];
 
   function formatNumber(n) {
       n = n.toString();
@@ -73,7 +74,18 @@
       else if (/^\d{13}$/.test(time)) {
           timeStamp += time;
       }
-      return parseInt(timeStamp);
+      else if (/^\d{10}$/.test(time)) {
+          timeStamp += parseInt(time, 10) * 1000;
+      }
+      return parseInt(timeStamp, 10);
+  }
+  function getLocationCGIName(location) {
+      var CGIName;
+      if (!!location.match(/\/[A-Za-z]+\?/)) {
+          CGIName = location.match(/\/[A-Za-z]+\?/)[0];
+          CGIName = CGIName.replace('\?', '').replace('\/', '');
+      }
+      return CGIName;
   }
 
   /**
@@ -106,6 +118,7 @@
           this.onupgradeneeded = config && config.onupgradeneeded ? config.onupgradeneeded : null;
           this.maxErrorNum = config && config.maxErrorNum ? config.maxErrorNum : 3;
           this.poolHandler = poolHandler;
+          this.keep7Days = config && config.keep7Days ? config.keep7Days : true;
           this.init();
       }
       MPIndexedDB.prototype.init = function () {
@@ -171,16 +184,18 @@
               catch (e) {
                   _this.throwError(ErrorLevel.fatal, 'consume pool error', e);
               }
-              setTimeout(function () {
-                  if (_this.dbStatus !== DB_Status.INITED) {
-                      _this.poolHandler.push(function () {
-                          return _this.keep(7);
-                      });
-                  }
-                  else {
-                      _this.keep(7); // 保留7天数据
-                  }
-              }, 1000);
+              if (!!_this.keep7Days) {
+                  setTimeout(function () {
+                      if (_this.dbStatus !== DB_Status.INITED) {
+                          _this.poolHandler.push(function () {
+                              return _this.keep(7);
+                          });
+                      }
+                      else {
+                          _this.keep(7); // 保留7天数据
+                      }
+                  }, 1000);
+              }
           };
           request.onblocked = function () {
               _this.throwError(ErrorLevel.serious, 'indexedDB is blocked');
@@ -188,28 +203,30 @@
           request.onupgradeneeded = function (e) {
               _this.db = e.target.result;
               try {
-                  if (!_this.db.objectStoreNames.contains(_this.DB_STORE_NAME)) { // 没有store则创建
-                      var objectStore = _this.db.createObjectStore(_this.DB_STORE_NAME, {
-                          autoIncrement: true
-                      });
-                      objectStore.createIndex('location', 'location', {
-                          unique: false
-                      });
-                      objectStore.createIndex('level', 'level', {
-                          unique: false
-                      });
-                      objectStore.createIndex('description', 'description', {
-                          unique: false
-                      });
-                      objectStore.createIndex('data', 'data', {
-                          unique: false
-                      });
-                      objectStore.createIndex('timestamp', 'timestamp', {
-                          unique: false
-                      });
-                  }
                   if (typeof _this.onupgradeneeded === 'function') {
                       _this.onupgradeneeded(e);
+                  }
+                  else {
+                      if (!_this.db.objectStoreNames.contains(_this.DB_STORE_NAME)) { // 没有store则创建
+                          var objectStore = _this.db.createObjectStore(_this.DB_STORE_NAME, {
+                              autoIncrement: true
+                          });
+                          objectStore.createIndex('location', 'location', {
+                              unique: false
+                          });
+                          objectStore.createIndex('level', 'level', {
+                              unique: false
+                          });
+                          objectStore.createIndex('description', 'description', {
+                              unique: false
+                          });
+                          objectStore.createIndex('data', 'data', {
+                              unique: false
+                          });
+                          objectStore.createIndex('timestamp', 'timestamp', {
+                              unique: false
+                          });
+                      }
                   }
               }
               catch (event) {
@@ -270,8 +287,8 @@
               };
           }
       };
-      MPIndexedDB.prototype.get = function (from, to, dealFc) {
-          var transaction = this.getTransaction(TransactionType.READ_ONLY);
+      MPIndexedDB.prototype.get = function (from, to, dealFc, successCb) {
+          var transaction = this.getTransaction(TransactionType.READ_WRITE);
           if (transaction === null) {
               this.throwError(ErrorLevel.fatal, 'transaction is null');
               return false;
@@ -289,23 +306,30 @@
           var results = [];
           var keyRange = IDBKeyRange.bound(fromTime, toTime); // from<=timestamp<=to
           var request = store.index('timestamp').openCursor(keyRange);
-          request.onsuccess = function (event) {
-              var cursor = event.target.result;
-              if (cursor) {
-                  results.push({
-                      time: cursor.value.time,
-                      level: cursor.value.level,
-                      location: cursor.value.location,
-                      description: cursor.value.description,
-                      data: cursor.value.data,
-                      timestamp: cursor.value.timestamp
-                  });
-                  cursor["continue"]();
-              }
-              else {
-                  dealFc(results);
-              }
-          };
+          if (typeof successCb === 'function') {
+              request.onsuccess = function (event) {
+                  successCb(event);
+              };
+          }
+          else if (typeof dealFc === 'function') {
+              request.onsuccess = function (event) {
+                  var cursor = event.target.result;
+                  if (cursor) {
+                      results.push({
+                          time: cursor.value.time,
+                          level: cursor.value.level,
+                          location: cursor.value.location,
+                          description: cursor.value.description,
+                          data: cursor.value.data,
+                          timestamp: cursor.value.timestamp
+                      });
+                      cursor["continue"]();
+                  }
+                  else {
+                      dealFc(results);
+                  }
+              };
+          }
           return true;
       };
       MPIndexedDB.prototype.clean = function () {
@@ -438,6 +462,9 @@
       LogController.prototype.filterFunction = function (obj) {
           var newObj = {};
           try {
+              if (typeof obj == 'undefined') {
+                  return '';
+              }
               // 函数则转为字符串
               if (typeof obj === 'function') {
                   return obj.toString();
@@ -455,9 +482,7 @@
               return newObj;
           }
           catch (e) {
-              return {
-                  error: 'filterFunction error'
-              };
+              console.log(e);
           }
       };
       LogController.prototype.flush = function () {
@@ -474,14 +499,14 @@
           this.bufferLog = [];
           return 0;
       };
-      LogController.prototype.get = function (from, to, dealFun) {
+      LogController.prototype.get = function (from, to, dealFun, successCb) {
           var _this = this;
           if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
               return this.poolHandler.push(function () {
-                  return _this.get(from, to, dealFun);
+                  return _this.get(from, to, dealFun, successCb);
               });
           }
-          this.mpIndexedDB.get(from, to, dealFun);
+          this.mpIndexedDB.get(from, to, dealFun, successCb);
       };
       LogController.prototype.keep = function (saveDays) {
           var _this = this;
@@ -501,7 +526,9 @@
    */
   var Mplogd = /** @class */ (function () {
       function Mplogd(config) {
-          this.defaultAjaxFilter = null;
+          this.defaultAjaxFilter = function (ajaxUrl) {
+              return IgnoreCGIName.indexOf(getLocationCGIName(ajaxUrl)) === -1;
+          };
           this.xhrOpen = XMLHttpRequest.prototype.open;
           // xhr 原生 send 方法
           this.xhrSend = XMLHttpRequest.prototype.send;
@@ -554,12 +581,14 @@
                       args[_i] = arguments[_i];
                   }
                   var startTime = new Date().getTime();
+                  var ajaxRequestId = +new Date();
                   if (that_1.logAjaxFilter && that_1.logAjaxFilter(lajaxUrl, lajaxMethod) || !that_1.logAjaxFilter) {
-                      // 添加一条日志到缓存
-                      that_1.info('[ajax] send: ' + lajaxMethod.toLowerCase() + '; request：' + lajaxUrl);
+                      var requestMsg = "[ajax] id:" + ajaxRequestId + " request " + lajaxUrl + " " + lajaxMethod;
+                      lajaxMethod.toLowerCase() === 'post' ? that_1.info(requestMsg, args[0]) : that_1.info(requestMsg);
                   }
                   // 添加 readystatechange 事件
                   this.addEventListener('readystatechange', function changeEvent() {
+                      var infoMsg = '';
                       // 排除掉用户自定义不需要记录日志的 ajax
                       if (that_1.logAjaxFilter && that_1.logAjaxFilter(lajaxUrl, lajaxMethod) || !that_1.logAjaxFilter) {
                           try {
@@ -567,24 +596,14 @@
                                   var endTime = new Date().getTime();
                                   // 请求耗时
                                   var costTime = (endTime - startTime) / 1000;
-                                  if (this.status >= 200 && this.status < 400) {
-                                      that_1.info('request succeed');
-                                  }
-                                  else {
-                                      that_1.info('request failed');
-                                  }
-                                  that_1.info('request cost：' + costTime + '; URL：' + lajaxUrl + '; request method:' + lajaxMethod);
-                                  if (lajaxMethod.toLowerCase() === 'post') {
-                                      that_1.info('request data: ', args[0]);
+                                  if (this.status === 200) {
+                                      that_1.info("[ajax] id:" + ajaxRequestId + " response 200 " + lajaxUrl + " " + costTime, this.responseText);
                                   }
                               }
                           }
                           catch (err) {
-                              that_1.error('request failed！', err);
-                              that_1.error('URL：' + lajaxUrl + ';request method：' + lajaxMethod + ',' + this.status);
-                              if (lajaxMethod.toLowerCase() === 'post') {
-                                  that_1.error('request data', args[0]);
-                              }
+                              infoMsg = "[ajax] id:" + ajaxRequestId + " response " + this.status + " " + lajaxUrl;
+                              lajaxMethod.toLowerCase() === 'post' ? that_1.error(infoMsg, args[0]) : that_1.error(infoMsg);
                           }
                       }
                   });
@@ -601,7 +620,7 @@
               catch (e) {
                   console.log(e);
               }
-              event.preventDefault();
+              return null; // 阻止弹框
           });
       };
       Mplogd.prototype.info = function (description, data) {
@@ -613,8 +632,15 @@
       Mplogd.prototype.error = function (description, data) {
           this.logController.log(this.location, LevelEnum.error, description, data);
       };
-      Mplogd.prototype.get = function (from, to, dealFun) {
-          this.logController.get(from, to, dealFun);
+      /**
+       *
+       * @param from 开始时间
+       * @param to 结束时间
+       * @param dealFun 处理最终返回结果的List(可选)
+       * @param successCb 处理查询成功的方法(可选)
+       */
+      Mplogd.prototype.get = function (from, to, dealFun, successCb) {
+          this.logController.get(from, to, dealFun, successCb);
       };
       Mplogd.prototype.keep = function (saveDays) {
           this.logController.keep(saveDays);

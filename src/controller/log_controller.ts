@@ -41,9 +41,12 @@ export class LogController {
     }
   }
 
-  private filterFunction(obj: any): object {
+  private filterFunction(obj: any): any{
     const newObj:any = {};
     try {
+      if (typeof obj == 'undefined') {
+        return '';
+      }
       // 函数则转为字符串
       if (typeof obj === 'function') {
         return obj.toString();
@@ -62,9 +65,7 @@ export class LogController {
       }
       return newObj;
     } catch (e) {
-      return {
-        error: 'filterFunction error'
-      };
+      console.log(e);
     }
   }
 
@@ -83,13 +84,13 @@ export class LogController {
     return 0;
   }
 
-  public get(from: Date, to: Date, dealFun: Function): any{
+  public get(from: Date, to: Date, dealFun?: Function, successCb?: Function): any{
     if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
       return this.poolHandler.push(() => {
-        return this.get(from, to, dealFun);
+        return this.get(from, to, dealFun, successCb);
       });
     }
-    this.mpIndexedDB.get(from, to, dealFun);
+    this.mpIndexedDB.get(from, to, dealFun, successCb);
   }
 
   public keep(saveDays: number): void {

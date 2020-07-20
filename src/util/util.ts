@@ -25,6 +25,17 @@ export function formatDate(time: any) {
     timeStamp += new Date(time).getTime();
   } else if (/^\d{13}$/.test(time)) {
     timeStamp += time;
+  } else if (/^\d{10}$/.test(time)) {
+    timeStamp += parseInt(time, 10) * 1000;
   }
-  return parseInt(timeStamp);
+  return parseInt(timeStamp, 10);
+}
+
+export function getLocationCGIName(location) {
+  let CGIName;
+  if (!!location.match(/\/[A-Za-z]+\?/)) {
+    CGIName = location.match(/\/[A-Za-z]+\?/)[0];
+    CGIName = CGIName.replace('\?', '').replace('\/', '');
+  }
+  return CGIName;
 }
