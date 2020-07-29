@@ -5,6 +5,7 @@
 import { MplogConfig, DB_Status, ErrorLevel} from '../util/config';
 import { PoolHandler } from '../controller/pool_handler';
 import { formatDate } from '../util/util';
+import { getIfCurrentUsageExceed } from '../util/db_size';
 
 const TransactionType = {
   /**
@@ -32,6 +33,8 @@ export class MPIndexedDB {
 
   public indexedDB: IDBFactory;
 
+  public BadJsReport: Function | null;
+
   private maxErrorNum : number;
 
   private currentErrorNum = 0;
@@ -50,7 +53,11 @@ export class MPIndexedDB {
   
   private poolHandler: PoolHandler;
 
-  private keep7Days:boolean;
+  private keep7Days: boolean;
+
+  private MAX_CLEAN_TIME = 2; // 最大清理次数
+
+  private currentCleanTime = 0; // 目前的清理次数
 
   constructor(config: MplogConfig, poolHandler: PoolHandler) {
     this.DB_NAME = config && config.dbName ? config.dbName : this.defaultDbName;
@@ -68,6 +75,8 @@ export class MPIndexedDB {
     this.poolHandler = poolHandler;
 
     this.keep7Days = config && config.keep7Days ?  config.keep7Days : true;
+
+    this.BadJsReport = config && config.BadJsReport ? config.BadJsReport : null;
 
     this.init();
   }
@@ -112,7 +121,7 @@ export class MPIndexedDB {
         errLvl = ErrorLevel.fatal; // 致命错误
         this.dbStatus = DB_Status.FAILED;
       }
-      this.throwError(errLvl, 'indexedDB open error, message:', (<any>e.target).error);
+      this.throwError(errLvl, 'indexedDB open error', (<any>e.target).error);
     }
 
     request.onsuccess = e => {
@@ -128,9 +137,8 @@ export class MPIndexedDB {
         this.db.close();
         this.dbStatus = DB_Status.FAILED;
         this.currentRetryCount = this.maxRetryCount + 1; // 不需要重试了
-        this.throwError(ErrorLevel.fatal, 'indexedDB version change, message:', event.target.error);
+        this.throwError(ErrorLevel.fatal, 'indexedDB version change', event.target.error);
       };
-
       try {
         this.poolHandler.consume();
       } catch(e) {
@@ -188,15 +196,21 @@ export class MPIndexedDB {
     }
   }
 
+  private async checkCurrentStorage() {
+    if (await getIfCurrentUsageExceed()) {
+      this.clean();
+    };
+  }
+
   private checkDB(event: any): void {
+    // 如果系统提示满容，或者超过限制容量清理
     if (event && event.target && event.target.error && event.target.error.name === 'QuotaExceededError') { // 硬盘容量满了，清下日志
       this.clean();
-    }
+    } 
   }
 
   private getTransaction(transactionType: string): (IDBTransaction | null) {
     let transaction: IDBTransaction | null = null;
-    
     if (this.dbStatus === DB_Status.FAILED) {
       transaction = null;
     } else {
@@ -214,9 +228,7 @@ export class MPIndexedDB {
 
         transaction.onabort = event => {
           event.stopPropagation();
-          if ((<any>event.target).error && (<any>event.target).error.name === 'QuotaExceededError') {
-            this.clean();
-          }
+          this.checkDB(event);
         };
       }
     }
@@ -224,6 +236,7 @@ export class MPIndexedDB {
   }
 
   public insertItems(bufferList: Array<any>): any {
+    this.checkCurrentStorage();
     let request;
     const transaction = this.getTransaction(TransactionType.READ_WRITE);
     if (transaction === null) {
@@ -296,11 +309,17 @@ export class MPIndexedDB {
       this.throwError(ErrorLevel.serious, 'clean database failed', (<any>event.target).error);
     };
     request.onsuccess = () => {
-      this.dbStatus = DB_Status.FAILED;
+      this.currentCleanTime++;
+      if (this.currentCleanTime <= this.MAX_CLEAN_TIME) {
+        this.dbStatus = DB_Status.INITING;
+        this.createDB();
+      } else {
+        this.dbStatus = DB_Status.INITED;
+      }
     };
   }
 
-  public keep(saveDays: number): void {
+  public keep(saveDays?: number): void {
     const transaction = this.getTransaction(TransactionType.READ_WRITE);
     if (transaction === null) {
       this.throwError(ErrorLevel.fatal, 'transaction is null');
@@ -343,8 +362,15 @@ export class MPIndexedDB {
       errorMsg = errorMsg + ':' + (error.message || error.stack || error.name);
       errorStr = error.toString();
     }
-
     console.error && console.error(`Mplog: error msg: ${errorMsg}, error detail: ${errorStr}`);
+    // 可以对内部的错误类型上报
+    try {
+      if (this.BadJsReport) {
+        let reportInfo = `Mplog: error msg: ${errorMsg}, error detail: ${errorStr}`;
+        this.BadJsReport(errorMsg, reportInfo);
+      }
+    } catch (e) {}
+
     if (this.dbStatus === DB_Status.FAILED) {
       this.timer = setInterval(() => {
         this.retryDBConnection();

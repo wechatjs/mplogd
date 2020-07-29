@@ -47,6 +47,7 @@
       error: 'error'
   };
   var IgnoreCGIName = ['mplog', 'report', 'webcommreport'];
+  var MAX_LOG_SIZE = 10000000; // 100MB
 
   function formatNumber(n) {
       n = n.toString();
@@ -88,10 +89,84 @@
       return CGIName;
   }
 
-  /**
-   * @author dididong
-   * @description 使用indexedDB进行浏览器端存储
-   */
+  /*! *****************************************************************************
+  Copyright (c) Microsoft Corporation. All rights reserved.
+  Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+  this file except in compliance with the License. You may obtain a copy of the
+  License at http://www.apache.org/licenses/LICENSE-2.0
+
+  THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
+  WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE,
+  MERCHANTABLITY OR NON-INFRINGEMENT.
+
+  See the Apache Version 2.0 License for specific language governing permissions
+  and limitations under the License.
+  ***************************************************************************** */
+
+  function __awaiter(thisArg, _arguments, P, generator) {
+      return new (P || (P = Promise))(function (resolve, reject) {
+          function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+          function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+          function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+          step((generator = generator.apply(thisArg, _arguments || [])).next());
+      });
+  }
+
+  function __generator(thisArg, body) {
+      var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g;
+      return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
+      function verb(n) { return function (v) { return step([n, v]); }; }
+      function step(op) {
+          if (f) throw new TypeError("Generator is already executing.");
+          while (_) try {
+              if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+              if (y = 0, t) op = [op[0] & 2, t.value];
+              switch (op[0]) {
+                  case 0: case 1: t = op; break;
+                  case 4: _.label++; return { value: op[1], done: false };
+                  case 5: _.label++; y = op[1]; op = [0]; continue;
+                  case 7: op = _.ops.pop(); _.trys.pop(); continue;
+                  default:
+                      if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
+                      if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
+                      if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
+                      if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
+                      if (t[2]) _.ops.pop();
+                      _.trys.pop(); continue;
+              }
+              op = body.call(thisArg, _);
+          } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
+          if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
+      }
+  }
+
+  function getIfCurrentUsageExceed() {
+      return __awaiter(this, void 0, void 0, function () {
+          return __generator(this, function (_a) {
+              if (window.navigator && window.navigator.storage && window.navigator.storage.estimate) {
+                  return [2 /*return*/, window.navigator.storage.estimate().then(function (_a) {
+                          var quota = _a.quota, usage = _a.usage;
+                          return usage >= quota || usage >= MAX_LOG_SIZE;
+                      })["catch"](function () {
+                          return false;
+                      })];
+              }
+              else if (window.navigator && window.navigator.webkitTemporaryStorage && window.navigator.webkitTemporaryStorage.queryUsageAndQuota) {
+                  return [2 /*return*/, window.navigator.webkitTemporaryStorage.queryUsageAndQuota(function (usedBytes, grantedBytes) {
+                          return usedBytes > grantedBytes || usedBytes >= MAX_LOG_SIZE;
+                      })["catch"](function () {
+                          return false;
+                      })];
+              }
+              else {
+                  return [2 /*return*/, false];
+              }
+              return [2 /*return*/];
+          });
+      });
+  }
+
   var TransactionType = {
       /**
        * 支持读写
@@ -119,6 +194,7 @@
           this.maxErrorNum = config && config.maxErrorNum ? config.maxErrorNum : 3;
           this.poolHandler = poolHandler;
           this.keep7Days = config && config.keep7Days ? config.keep7Days : true;
+          this.BadJsReport = config && config.BadJsReport ? config.BadJsReport : null;
           this.init();
       }
       MPIndexedDB.prototype.init = function () {
@@ -161,7 +237,7 @@
                   errLvl = ErrorLevel.fatal; // 致命错误
                   _this.dbStatus = DB_Status.FAILED;
               }
-              _this.throwError(errLvl, 'indexedDB open error, message:', e.target.error);
+              _this.throwError(errLvl, 'indexedDB open error', e.target.error);
           };
           request.onsuccess = function (e) {
               if (_this.dbStatus !== DB_Status.INITING) { // 可能onupgradeneeded执行有问题
@@ -176,7 +252,7 @@
                   _this.db.close();
                   _this.dbStatus = DB_Status.FAILED;
                   _this.currentRetryCount = _this.maxRetryCount + 1; // 不需要重试了
-                  _this.throwError(ErrorLevel.fatal, 'indexedDB version change, message:', event.target.error);
+                  _this.throwError(ErrorLevel.fatal, 'indexedDB version change', event.target.error);
               };
               try {
                   _this.poolHandler.consume();
@@ -235,7 +311,22 @@
               }
           };
       };
+      MPIndexedDB.prototype.checkCurrentStorage = function () {
+          return __awaiter(this, void 0, void 0, function () {
+              return __generator(this, function (_a) {
+                  switch (_a.label) {
+                      case 0: return [4 /*yield*/, getIfCurrentUsageExceed()];
+                      case 1:
+                          if (_a.sent()) {
+                              this.clean();
+                          }
+                          return [2 /*return*/];
+                  }
+              });
+          });
+      };
       MPIndexedDB.prototype.checkDB = function (event) {
+          // 如果系统提示满容，或者超过限制容量清理
           if (event && event.target && event.target.error && event.target.error.name === 'QuotaExceededError') { // 硬盘容量满了，清下日志
               this.clean();
           }
@@ -260,9 +351,7 @@
                   };
                   transaction.onabort = function (event) {
                       event.stopPropagation();
-                      if (event.target.error && event.target.error.name === 'QuotaExceededError') {
-                          _this.clean();
-                      }
+                      _this.checkDB(event);
                   };
               }
           }
@@ -270,6 +359,7 @@
       };
       MPIndexedDB.prototype.insertItems = function (bufferList) {
           var _this = this;
+          this.checkCurrentStorage();
           var request;
           var transaction = this.getTransaction(TransactionType.READ_WRITE);
           if (transaction === null) {
@@ -340,7 +430,8 @@
               _this.throwError(ErrorLevel.serious, 'clean database failed', event.target.error);
           };
           request.onsuccess = function () {
-              _this.dbStatus = DB_Status.FAILED;
+              _this.dbStatus = DB_Status.INITING;
+              _this.createDB();
           };
       };
       MPIndexedDB.prototype.keep = function (saveDays) {
@@ -387,6 +478,14 @@
               errorStr = error.toString();
           }
           console.error && console.error("Mplog: error msg: " + errorMsg + ", error detail: " + errorStr);
+          // 可以对内部的错误类型上报
+          try {
+              if (this.BadJsReport) {
+                  var reportInfo = "Mplog: error msg: " + errorMsg + ", error detail: " + errorStr;
+                  this.BadJsReport(errorMsg, reportInfo);
+              }
+          }
+          catch (e) { }
           if (this.dbStatus === DB_Status.FAILED) {
               this.timer = setInterval(function () {
                   _this.retryDBConnection();
@@ -441,6 +540,7 @@
           this.bufferLog = [];
           // 缓存记录的大小
           this.bufferSize = config && typeof config.bufferSize !== 'undefined' ? config.bufferSize * 1 : 10;
+          this.maxLogSize = config && config.maxLogSize ? config.maxLogSize : 3000;
           this.poolHandler = new PoolHandler();
           this.mpIndexedDB = new MPIndexedDB(config, this.poolHandler);
       }
@@ -451,7 +551,7 @@
               'location': location,
               'level': level,
               'description': description,
-              'data': this.filterFunction(data),
+              'data': this.dealLength(this.filterFunction(data)),
               'timestamp': date.getTime() // 时间戳，单位毫秒
           };
           this.bufferLog.push(value);
@@ -459,6 +559,18 @@
               this.flush();
           }
       };
+      LogController.prototype.dealLength = function (logValue) {
+          if (logValue.length >= this.maxLogSize) {
+              logValue = logValue.substr(0, this.maxLogSize);
+          }
+          return logValue;
+      };
+      // private ifDBClosed() {
+      //   if (this.mpIndexedDB.dbStatus === DB_Status.CLOSED) {
+      //     this.mpIndexedDB.dbStatus = DB_Status.INITING;
+      //     this.mpIndexedDB.createDB();
+      //   }
+      // }
       LogController.prototype.filterFunction = function (obj) {
           var newObj = {};
           try {
@@ -490,6 +602,7 @@
           if (this.bufferLog.length === 0) {
               return false;
           }
+          // this.ifDBClosed();
           if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
               return this.poolHandler.push(function () {
                   return _this.flush();
@@ -501,6 +614,7 @@
       };
       LogController.prototype.get = function (from, to, dealFun, successCb) {
           var _this = this;
+          // this.ifDBClosed();
           if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
               return this.poolHandler.push(function () {
                   return _this.get(from, to, dealFun, successCb);
@@ -510,6 +624,7 @@
       };
       LogController.prototype.keep = function (saveDays) {
           var _this = this;
+          // this.ifDBClosed();
           if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
               return this.poolHandler.push(function () {
                   return _this.keep(saveDays);
@@ -596,9 +711,7 @@
                                   var endTime = new Date().getTime();
                                   // 请求耗时
                                   var costTime = (endTime - startTime) / 1000;
-                                  if (this.status === 200) {
-                                      that_1.info("[ajax] id:" + ajaxRequestId + " response 200 " + lajaxUrl + " " + costTime, this.responseText);
-                                  }
+                                  that_1.info("[ajax] id:" + ajaxRequestId + " response " + this.status + " " + lajaxUrl + " " + costTime, this.responseText);
                               }
                           }
                           catch (err) {

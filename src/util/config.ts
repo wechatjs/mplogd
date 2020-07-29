@@ -24,6 +24,10 @@ export interface MplogConfig {
   keep7Days?: boolean;
   
   onupgradeneeded?: Function | null;
+  // 是否对内部的错误上报
+  BadJsReport?: Function | null;
+  // 单条log的最大长度
+  maxLogSize?: number;
 }
 
 export const DB_Status  = {
@@ -72,3 +76,5 @@ export const LevelEnum = {
 };
 
 export const IgnoreCGIName = ['mplog', 'report', 'webcommreport'];
+
+export const MAX_LOG_SIZE = 10000000; // 100MB

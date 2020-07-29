@@ -93,10 +93,7 @@ export default class Mplogd {
                 const endTime:number = new Date().getTime();
                 // 请求耗时
                 const costTime = (endTime - startTime) / 1000;
-
-                if (this.status === 200) {
-                  that.info(`[ajax] id:${ajaxRequestId} response 200 ${lajaxUrl} ${costTime}`, this.responseText);
-                }
+                that.info(`[ajax] id:${ajaxRequestId} response ${this.status} ${lajaxUrl} ${costTime}`, this.responseText);
               }
             } catch (err) {
               infoMsg = `[ajax] id:${ajaxRequestId} response ${this.status} ${lajaxUrl}`;

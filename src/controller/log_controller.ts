@@ -16,10 +16,14 @@ export class LogController {
 
   private poolHandler: PoolHandler;
 
+  private maxLogSize: number;
+
   constructor(config: MplogConfig) {
     // 缓存记录的大小
     this.bufferSize = config && typeof config.bufferSize !== 'undefined' ? config.bufferSize * 1 : 10;
     
+    this.maxLogSize = config && config.maxLogSize ? config.maxLogSize : 3000;
+
     this.poolHandler = new PoolHandler();
 
     this.mpIndexedDB = new MPIndexedDB(config, this.poolHandler);
@@ -32,7 +36,7 @@ export class LogController {
       'location': location, // 页面链接
       'level': level, // 日志等级
       'description': description, // 描述
-      'data': this.filterFunction(data), // 日志
+      'data': this.dealLength(this.filterFunction(data)), // 日志
       'timestamp': date.getTime() // 时间戳，单位毫秒
     };
     this.bufferLog.push(value);
@@ -40,6 +44,13 @@ export class LogController {
       this.flush();
     }
   }
+
+  private dealLength(logValue: String): String {
+    if (typeof this.maxLogSize === 'number' && typeof logValue === 'string' && logValue.length >= this.maxLogSize) {
+      logValue = logValue.substr(0, this.maxLogSize);
+    }
+    return logValue;
+  } 
 
   private filterFunction(obj: any): any{
     const newObj:any = {};
@@ -73,7 +84,7 @@ export class LogController {
     if (this.bufferLog.length === 0) {
       return false;
     }
-    
+   
     if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
       return this.poolHandler.push(() => {
         return this.flush();
