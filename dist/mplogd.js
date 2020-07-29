@@ -186,6 +186,8 @@
           this.maxRetryCount = 3;
           this.currentRetryCount = 0;
           this.retryInterval = 6000;
+          this.MAX_CLEAN_TIME = 2; // 最大清理次数
+          this.currentCleanTime = 0; // 目前的清理次数
           this.DB_NAME = config && config.dbName ? config.dbName : this.defaultDbName;
           this.DB_STORE_NAME = config && config.dbStoreName ? config.dbStoreName : this.defaultDbStoreName;
           this.DB_VERSION = config && typeof config.dbVersion !== 'undefined' ? config.dbVersion : 1;
@@ -430,8 +432,14 @@
               _this.throwError(ErrorLevel.serious, 'clean database failed', event.target.error);
           };
           request.onsuccess = function () {
-              _this.dbStatus = DB_Status.INITING;
-              _this.createDB();
+              _this.currentCleanTime++;
+              if (_this.currentCleanTime <= _this.MAX_CLEAN_TIME) {
+                  _this.dbStatus = DB_Status.INITING;
+                  _this.createDB();
+              }
+              else {
+                  _this.dbStatus = DB_Status.INITED;
+              }
           };
       };
       MPIndexedDB.prototype.keep = function (saveDays) {
@@ -560,17 +568,11 @@
           }
       };
       LogController.prototype.dealLength = function (logValue) {
-          if (logValue.length >= this.maxLogSize) {
+          if (typeof this.maxLogSize === 'number' && typeof logValue === 'string' && logValue.length >= this.maxLogSize) {
               logValue = logValue.substr(0, this.maxLogSize);
           }
           return logValue;
       };
-      // private ifDBClosed() {
-      //   if (this.mpIndexedDB.dbStatus === DB_Status.CLOSED) {
-      //     this.mpIndexedDB.dbStatus = DB_Status.INITING;
-      //     this.mpIndexedDB.createDB();
-      //   }
-      // }
       LogController.prototype.filterFunction = function (obj) {
           var newObj = {};
           try {
@@ -602,7 +604,6 @@
           if (this.bufferLog.length === 0) {
               return false;
           }
-          // this.ifDBClosed();
           if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
               return this.poolHandler.push(function () {
                   return _this.flush();
@@ -614,7 +615,6 @@
       };
       LogController.prototype.get = function (from, to, dealFun, successCb) {
           var _this = this;
-          // this.ifDBClosed();
           if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
               return this.poolHandler.push(function () {
                   return _this.get(from, to, dealFun, successCb);
@@ -624,7 +624,6 @@
       };
       LogController.prototype.keep = function (saveDays) {
           var _this = this;
-          // this.ifDBClosed();
           if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
               return this.poolHandler.push(function () {
                   return _this.keep(saveDays);

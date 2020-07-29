@@ -314,7 +314,7 @@ export class MPIndexedDB {
         this.dbStatus = DB_Status.INITING;
         this.createDB();
       } else {
-        this.dbStatus = DB_Status.INITED;
+        this.dbStatus = DB_Status.FAILED;
       }
     };
   }
