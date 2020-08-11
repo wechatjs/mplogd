@@ -149,10 +149,10 @@ export class MPIndexedDB {
         setTimeout(() => { // 1秒后清理默认store的过期数据
           if (this.dbStatus !== DB_Status.INITED) {
             this.poolHandler.push(() => {
-              return this.keep(7)
+              return this.keep(3)
             });
           } else {
-            this.keep(7); // 保留7天数据
+            this.keep(3); // 保留3天数据
           }
         }, 1000);
       }

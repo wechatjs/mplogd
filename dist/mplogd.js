@@ -47,7 +47,7 @@
       error: 'error'
   };
   var IgnoreCGIName = ['mplog', 'report', 'webcommreport'];
-  var MAX_LOG_SIZE = 10000000; // 100MB
+  var MAX_LOG_SIZE = 100000000; // 100MB
 
   function formatNumber(n) {
       n = n.toString();
@@ -144,22 +144,23 @@
   function getIfCurrentUsageExceed() {
       return __awaiter(this, void 0, void 0, function () {
           return __generator(this, function (_a) {
-              if (window.navigator && window.navigator.storage && window.navigator.storage.estimate) {
-                  return [2 /*return*/, window.navigator.storage.estimate().then(function (_a) {
-                          var quota = _a.quota, usage = _a.usage;
-                          return usage >= quota || usage >= MAX_LOG_SIZE;
-                      })["catch"](function () {
-                          return false;
-                      })];
+              try {
+                  if (window.navigator && window.navigator.storage && window.navigator.storage.estimate) {
+                      return [2 /*return*/, window.navigator.storage.estimate().then(function (_a) {
+                              var quota = _a.quota, usage = _a.usage;
+                              return usage >= quota || usage >= MAX_LOG_SIZE;
+                          })];
+                  }
+                  else if (window.navigator && window.navigator.webkitTemporaryStorage && window.navigator.webkitTemporaryStorage.queryUsageAndQuota) {
+                      return [2 /*return*/, window.navigator.webkitTemporaryStorage.queryUsageAndQuota(function (usedBytes, grantedBytes) {
+                              return usedBytes > grantedBytes || usedBytes >= MAX_LOG_SIZE;
+                          })];
+                  }
+                  else {
+                      return [2 /*return*/, false];
+                  }
               }
-              else if (window.navigator && window.navigator.webkitTemporaryStorage && window.navigator.webkitTemporaryStorage.queryUsageAndQuota) {
-                  return [2 /*return*/, window.navigator.webkitTemporaryStorage.queryUsageAndQuota(function (usedBytes, grantedBytes) {
-                          return usedBytes > grantedBytes || usedBytes >= MAX_LOG_SIZE;
-                      })["catch"](function () {
-                          return false;
-                      })];
-              }
-              else {
+              catch (e) {
                   return [2 /*return*/, false];
               }
               return [2 /*return*/];
@@ -266,11 +267,11 @@
                   setTimeout(function () {
                       if (_this.dbStatus !== DB_Status.INITED) {
                           _this.poolHandler.push(function () {
-                              return _this.keep(7);
+                              return _this.keep(3);
                           });
                       }
                       else {
-                          _this.keep(7); // 保留7天数据
+                          _this.keep(3); // 保留3天数据
                       }
                   }, 1000);
               }
@@ -438,7 +439,7 @@
                   _this.createDB();
               }
               else {
-                  _this.dbStatus = DB_Status.INITED;
+                  _this.dbStatus = DB_Status.FAILED;
               }
           };
       };
