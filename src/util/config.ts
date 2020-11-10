@@ -22,7 +22,7 @@ export interface MplogConfig {
   location?: string;
   // 是否自动只保留7天数据
   keep7Days?: boolean;
-  
+
   onupgradeneeded?: Function | null;
   // 是否对内部的错误上报
   BadJsReport?: Function | null;
@@ -30,7 +30,7 @@ export interface MplogConfig {
   maxLogSize?: number;
 }
 
-export const DB_Status  = {
+export const DBStatus  = { //eslint-disable-line
   /**
    * 初始化中
    */
@@ -42,11 +42,11 @@ export const DB_Status  = {
   /**
    * 失败
    */
-  FAILED: 'failed'
+  FAILED: 'failed',
 };
 
 export const ErrorLevel = {
-   /**
+  /**
    * 一般级别错误
    */
   normal: 1,
@@ -57,7 +57,7 @@ export const ErrorLevel = {
   /**
    * 致命错误
    */
-  fatal: 3
+  fatal: 3,
 };
 
 export const LevelEnum = {
@@ -72,7 +72,7 @@ export const LevelEnum = {
   /**
    * 错误
    */
-  error: 'error'
+  error: 'error',
 };
 
 export const IgnoreCGIName = ['mplog', 'report', 'webcommreport'];

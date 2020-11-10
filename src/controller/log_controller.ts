@@ -2,7 +2,7 @@
  * @author dididong
  * @description 实际进行日志操作
  */
-import { MplogConfig, DB_Status} from '../util/config';
+import { MplogConfig, DB_Status } from '../util/config';
 import * as Util  from '../util/util';
 import { MPIndexedDB } from '../database/indexedDB';
 import { PoolHandler } from '../controller/pool_handler';
@@ -11,7 +11,7 @@ export class LogController {
   public bufferSize: number;
 
   private bufferLog: Array<any> = [];
-   
+
   private mpIndexedDB: MPIndexedDB;
 
   private poolHandler: PoolHandler;
@@ -21,7 +21,7 @@ export class LogController {
   constructor(config: MplogConfig) {
     // 缓存记录的大小
     this.bufferSize = config && typeof config.bufferSize !== 'undefined' ? config.bufferSize * 1 : 10;
-    
+
     this.maxLogSize = config && config.maxLogSize ? config.maxLogSize : 3000;
 
     this.poolHandler = new PoolHandler();
@@ -29,15 +29,15 @@ export class LogController {
     this.mpIndexedDB = new MPIndexedDB(config, this.poolHandler);
   }
 
-  public log(location: string, level: string, description?: string, data?: any) : void{
+  public log(location: string, level: string, description?: string, data?: any): void{
     const date = new Date();
     const value = {
-      'time': Util.formatTime(date), // 时间字符串
-      'location': location, // 页面链接
-      'level': level, // 日志等级
-      'description': description, // 描述
-      'data': this.dealLength(this.filterFunction(data)), // 日志
-      'timestamp': date.getTime() // 时间戳，单位毫秒
+      time: Util.formatTime(date), // 时间字符串
+      location, // 页面链接
+      level, // 日志等级
+      description, // 描述
+      data: this.dealLength(this.filterFunction(data)), // 日志
+      timestamp: date.getTime(), // 时间戳，单位毫秒
     };
     this.bufferLog.push(value);
     if (this.bufferLog.length >= this.bufferSize) {
@@ -45,17 +45,44 @@ export class LogController {
     }
   }
 
+  public flush(): any {
+    if (this.bufferLog.length === 0) {
+      return false;
+    }
+
+    if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
+      return this.poolHandler.push(() => this.flush());
+    }
+    this.mpIndexedDB.insertItems(this.bufferLog);
+    this.bufferLog = [];
+    return 0;
+  }
+
+  public get(from: Date, to: Date, dealFun?: Function, successCb?: Function): any {
+    if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
+      return this.poolHandler.push(() => this.get(from, to, dealFun, successCb));
+    }
+    this.mpIndexedDB.get(from, to, dealFun, successCb);
+  }
+
+  public keep(saveDays: number): void {
+    if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
+      return this.poolHandler.push(() => this.keep(saveDays));
+    }
+    this.mpIndexedDB.keep(saveDays);
+  }
+
   private dealLength(logValue: String): String {
     if (typeof this.maxLogSize === 'number' && typeof logValue === 'string' && logValue.length >= this.maxLogSize) {
       logValue = logValue.substr(0, this.maxLogSize);
     }
     return logValue;
-  } 
+  }
 
-  private filterFunction(obj: any): any{
-    const newObj:any = {};
+  private filterFunction(obj: any): any {
+    const newObj: any = {};
     try {
-      if (typeof obj == 'undefined') {
+      if (typeof obj === 'undefined') {
         return '';
       }
       // 函数则转为字符串
@@ -78,38 +105,5 @@ export class LogController {
     } catch (e) {
       console.log(e);
     }
-  }
-
-  public flush(): any {
-    if (this.bufferLog.length === 0) {
-      return false;
-    }
-   
-    if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
-      return this.poolHandler.push(() => {
-        return this.flush();
-      });
-    }
-    this.mpIndexedDB.insertItems(this.bufferLog);
-    this.bufferLog = [];
-    return 0;
-  }
-
-  public get(from: Date, to: Date, dealFun?: Function, successCb?: Function): any{
-    if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
-      return this.poolHandler.push(() => {
-        return this.get(from, to, dealFun, successCb);
-      });
-    }
-    this.mpIndexedDB.get(from, to, dealFun, successCb);
-  }
-
-  public keep(saveDays: number): void {
-    if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
-      return this.poolHandler.push(() => {
-        return this.keep(saveDays);
-      });
-    }
-    this.mpIndexedDB.keep(saveDays);
   }
 }

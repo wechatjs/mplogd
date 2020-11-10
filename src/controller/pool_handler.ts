@@ -4,8 +4,8 @@
  */
 export class PoolHandler {
   private poolSize = 100;
-  
-  public pool:Array<any> = [];
+
+  public pool: Array<any> = [];
 
   public push(action: any): void {
     if (this.pool.length < this.poolSize) {
@@ -18,6 +18,6 @@ export class PoolHandler {
     while (handler) {
       handler();
       handler = this.pool.shift();
-    } 
+    }
   }
 }

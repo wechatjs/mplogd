@@ -1,6 +1,6 @@
 function formatNumber(n: any) {
   n = n.toString();
-  return n[1] ? n : '0' + n;
+  return n[1] ? n : `0${n}`;
 }
 
 export function formatTime(date: Date) {
@@ -10,13 +10,13 @@ export function formatTime(date: Date) {
   const hour = date.getHours();
   const minute = date.getMinutes();
   const second = date.getSeconds();
-  return [year, month, day].map(formatNumber).join('-') + ' ' + [hour, minute, second].map(formatNumber).join(':');
+  return `${[year, month, day].map(formatNumber).join('-')} ${[hour, minute, second].map(formatNumber).join(':')}`;
 }
 
 export function resolveUrl(url: string) {
   const link = document.createElement('a');
   link.href = url;
-  return link.protocol + '//' + link.host + link.pathname + link.search + link.hash;
+  return `${link.protocol}//${link.host}${link.pathname}${link.search}${link.hash}`;
 }
 
 export function formatDate(time: any) {
@@ -35,7 +35,7 @@ export function getLocationCGIName(location) {
   let CGIName;
   if (!!location.match(/\/[A-Za-z]+\?/)) {
     CGIName = location.match(/\/[A-Za-z]+\?/)[0];
-    CGIName = CGIName.replace('\?', '').replace('\/', '');
+    CGIName = CGIName.replace('\?', '').replace('\/', ''); // eslint-disable-line
   }
   return CGIName;
 }

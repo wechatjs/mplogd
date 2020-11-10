@@ -5,19 +5,15 @@ import { MAX_LOG_SIZE } from '../util/config';
 
 export async function getIfCurrentUsageExceed() {
   try {
-    if (window.navigator && window.navigator.storage && (<any>window.navigator).storage.estimate) {
-      return window.navigator.storage.estimate().then(({ quota, usage}) => {
-        return usage >= quota || usage >= MAX_LOG_SIZE;
-      });  
-    } else if (window.navigator && (<any>window.navigator).webkitTemporaryStorage && (<any>window.navigator).webkitTemporaryStorage.queryUsageAndQuota) {
-      return (<any>window.navigator).webkitTemporaryStorage.queryUsageAndQuota(
-        (usedBytes, grantedBytes) => {
-          return usedBytes > grantedBytes ||  usedBytes >= MAX_LOG_SIZE;
-        }
-      )
-    } else {
-      return false;
+    if (window.navigator && window.navigator.storage && (window.navigator as any).storage.estimate) {
+      return window.navigator.storage.estimate().then(({ quota, usage }) => usage >= quota || usage >= MAX_LOG_SIZE);
     }
+    if (window.navigator && (window.navigator as any).webkitTemporaryStorage
+      && (window.navigator as any).webkitTemporaryStorage.queryUsageAndQuota) {
+      return (window.navigator as any).webkitTemporaryStorage
+        .queryUsageAndQuota((usedBytes, grantedBytes) => usedBytes > grantedBytes ||  usedBytes >= MAX_LOG_SIZE);
+    }
+    return false;
   } catch (e) {
     return false;
   }
