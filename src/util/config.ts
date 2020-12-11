@@ -81,6 +81,6 @@ export const LevelEnum = {
 
 export const IgnoreCGIName = ['mplog', 'report', 'webcommreport'];
 
-export const MAX_LOG_SIZE = 40000000; // 100MB
+export const MAX_LOG_SIZE = 1000000000000; // 100MB
 
 export const STORAGE_MAX_SIZE = 100000000; // 100MB

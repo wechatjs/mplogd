@@ -198,21 +198,51 @@ export class MPIndexedDB {
       store.clear().onerror = event => this.throwError(ErrorLevel.serious, 'indexedb_keep_clear', (event.target as any).error);
     } else {
       // 删除过期数据
-      const range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
-      const keyRange = IDBKeyRange.upperBound(range); // timestamp<=range，证明过期
+      // const range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
+      // const keyRange = IDBKeyRange.upperBound(range); // timestamp<=range，证明过期
+      // if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
+      //   const request = store.index('timestamp').openCursor(keyRange);
+      //   request.onsuccess = (event) => {
+      //     this.throwError(ErrorLevel.unused, 'keep logs success');
+      //     const cursor = (event.target as any).result;
+      //     if (cursor) {
+      //       cursor.delete();
+      //       cursor.continue();
+      //     }
+      //   };
+      //   request.onerror = event => this.throwError(ErrorLevel.normal, 'keep logs error', (event.target as any).error);
+      // } else {
+      //   this.throwError(ErrorLevel.fatal, 'the store has no timestamp index');
+      // }
+      // test 1
+      console.log('begin deleting.......', Date.now());
+      const range = Date.now();
+      const keyRange = IDBKeyRange.upperBound(range);
       if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
-        const request = store.index('timestamp').openCursor(keyRange);
-        request.onsuccess = (event) => {
-          this.throwError(ErrorLevel.unused, 'keep logs success');
-          const cursor = (event.target as any).result;
-          if (cursor) {
-            cursor.delete();
-            cursor.continue();
+        // const request = store.index('timestamp').count();
+        // request.onsuccess = (e) => {
+        //   console.log(request.result);
+          // const cursor = (event.target as any).result;
+          // console.log(cursor);
+          // if (cursor) {
+          //   cursor.delete();
+          //   cursor.continue();
+          // }
+        // }
+        const request = store.index('timestamp').getAllKeys(keyRange);
+        request.onsuccess = (e) => {
+          let resp = request.result;
+          if (resp && resp.length) {
+            let begin = resp[0];
+            let end = resp[resp.length-1];
+            console.log(begin, end);
+            let deleteKeyRange = IDBKeyRange.bound(begin, end, false, false);
+            store.delete(deleteKeyRange).onsuccess = () => {
+              store.count().onsuccess = (e) => {console.log((e.target as any).result)};
+              console.log('deleting success', Date.now());
+            };
           }
         };
-        request.onerror = event => this.throwError(ErrorLevel.normal, 'keep logs error', (event.target as any).error);
-      } else {
-        this.throwError(ErrorLevel.fatal, 'the store has no timestamp index');
       }
     }
   }
@@ -337,15 +367,15 @@ export class MPIndexedDB {
         this.throwError(ErrorLevel.fatal, 'consume pool error', e);
       }
 
-      if (!!this.keep7Days) {
-        setTimeout(() => { // 1秒后清理默认store的过期数据
-          if (this.dbStatus !== DBStatus.INITED) {
-            this.poolHandler.push(() => this.keep(3));
-          } else {
-            this.keep(3); // 保留3天数据
-          }
-        }, 1000);
-      }
+      // if (!!this.keep7Days) {
+      //   setTimeout(() => { // 1秒后清理默认store的过期数据
+      //     if (this.dbStatus !== DBStatus.INITED) {
+      //       this.poolHandler.push(() => this.keep(3));
+      //     } else {
+      //       this.keep(3); // 保留3天数据
+      //     }
+      //   }, 1000);
+      // }
     };
 
     request.onblocked = () => {

@@ -51,7 +51,7 @@
       error: 'error',
   };
   var IgnoreCGIName = ['mplog', 'report', 'webcommreport'];
-  var MAX_LOG_SIZE = 40000000; // 100MB
+  var MAX_LOG_SIZE = 1000000000000; // 100MB
 
   function formatNumber(n) {
       n = n.toString();
@@ -322,22 +322,51 @@
           }
           else {
               // 删除过期数据
-              var range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
-              var keyRange = IDBKeyRange.upperBound(range); // timestamp<=range，证明过期
+              // const range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
+              // const keyRange = IDBKeyRange.upperBound(range); // timestamp<=range，证明过期
+              // if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
+              //   const request = store.index('timestamp').openCursor(keyRange);
+              //   request.onsuccess = (event) => {
+              //     this.throwError(ErrorLevel.unused, 'keep logs success');
+              //     const cursor = (event.target as any).result;
+              //     if (cursor) {
+              //       cursor.delete();
+              //       cursor.continue();
+              //     }
+              //   };
+              //   request.onerror = event => this.throwError(ErrorLevel.normal, 'keep logs error', (event.target as any).error);
+              // } else {
+              //   this.throwError(ErrorLevel.fatal, 'the store has no timestamp index');
+              // }
+              // test 1
+              console.log('begin deleting.......', Date.now());
+              var range = Date.now();
+              var keyRange = IDBKeyRange.upperBound(range);
               if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
-                  var request = store.index('timestamp').openCursor(keyRange);
-                  request.onsuccess = function (event) {
-                      _this.throwError(ErrorLevel.unused, 'keep logs success');
-                      var cursor = event.target.result;
-                      if (cursor) {
-                          cursor["delete"]();
-                          cursor["continue"]();
+                  // const request = store.index('timestamp').count();
+                  // request.onsuccess = (e) => {
+                  //   console.log(request.result);
+                  // const cursor = (event.target as any).result;
+                  // console.log(cursor);
+                  // if (cursor) {
+                  //   cursor.delete();
+                  //   cursor.continue();
+                  // }
+                  // }
+                  var request_1 = store.index('timestamp').getAllKeys(keyRange);
+                  request_1.onsuccess = function (e) {
+                      var resp = request_1.result;
+                      if (resp && resp.length) {
+                          var begin = resp[0];
+                          var end = resp[resp.length - 1];
+                          console.log(begin, end);
+                          var deleteKeyRange = IDBKeyRange.bound(begin, end, false, false);
+                          store["delete"](deleteKeyRange).onsuccess = function () {
+                              store.count().onsuccess = function (e) { console.log(e.target.result); };
+                              console.log('deleting success', Date.now());
+                          };
                       }
                   };
-                  request.onerror = function (event) { return _this.throwError(ErrorLevel.normal, 'keep logs error', event.target.error); };
-              }
-              else {
-                  this.throwError(ErrorLevel.fatal, 'the store has no timestamp index');
               }
           }
       };
@@ -470,16 +499,15 @@
                               catch (e) {
                                   _this.throwError(ErrorLevel.fatal, 'consume pool error', e);
                               }
-                              if (!!_this.keep7Days) {
-                                  setTimeout(function () {
-                                      if (_this.dbStatus !== DBStatus.INITED) {
-                                          _this.poolHandler.push(function () { return _this.keep(3); });
-                                      }
-                                      else {
-                                          _this.keep(3); // 保留3天数据
-                                      }
-                                  }, 1000);
-                              }
+                              // if (!!this.keep7Days) {
+                              //   setTimeout(() => { // 1秒后清理默认store的过期数据
+                              //     if (this.dbStatus !== DBStatus.INITED) {
+                              //       this.poolHandler.push(() => this.keep(3));
+                              //     } else {
+                              //       this.keep(3); // 保留3天数据
+                              //     }
+                              //   }, 1000);
+                              // }
                           };
                           request.onblocked = function () {
                               _this.throwError(ErrorLevel.serious, 'indexedDB is blocked');
