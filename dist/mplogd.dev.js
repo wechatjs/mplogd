@@ -4,7 +4,7 @@
   (global = global || self, global.Mplogd = factory());
 }(this, function () { 'use strict';
 
-  var DB_Status = {
+  var DBStatus = {
       /**
        * 初始化中
        */
@@ -16,12 +16,16 @@
       /**
        * 失败
        */
-      FAILED: 'failed'
+      FAILED: 'failed',
   };
   var ErrorLevel = {
       /**
-      * 一般级别错误
-      */
+       * 只用于上报的错误
+       */
+      unused: 0,
+      /**
+       * 一般级别错误
+       */
       normal: 1,
       /**
        * 严重错误
@@ -30,7 +34,7 @@
       /**
        * 致命错误
        */
-      fatal: 3
+      fatal: 3,
   };
   var LevelEnum = {
       /**
@@ -44,14 +48,14 @@
       /**
        * 错误
        */
-      error: 'error'
+      error: 'error',
   };
   var IgnoreCGIName = ['mplog', 'report', 'webcommreport'];
-  var MAX_LOG_SIZE = 100000000; // 100MB
+  var MAX_LOG_SIZE = 40000000; // 100MB
 
   function formatNumber(n) {
       n = n.toString();
-      return n[1] ? n : '0' + n;
+      return n[1] ? n : "0" + n;
   }
   function formatTime(date) {
       var year = date.getFullYear();
@@ -60,12 +64,12 @@
       var hour = date.getHours();
       var minute = date.getMinutes();
       var second = date.getSeconds();
-      return [year, month, day].map(formatNumber).join('-') + ' ' + [hour, minute, second].map(formatNumber).join(':');
+      return [year, month, day].map(formatNumber).join('-') + " " + [hour, minute, second].map(formatNumber).join(':');
   }
   function resolveUrl(url) {
       var link = document.createElement('a');
       link.href = url;
-      return link.protocol + '//' + link.host + link.pathname + link.search + link.hash;
+      return link.protocol + "//" + link.host + link.pathname + link.search + link.hash;
   }
   function formatDate(time) {
       var timeStamp = '';
@@ -84,7 +88,7 @@
       var CGIName;
       if (!!location.match(/\/[A-Za-z]+\?/)) {
           CGIName = location.match(/\/[A-Za-z]+\?/)[0];
-          CGIName = CGIName.replace('\?', '').replace('\/', '');
+          CGIName = CGIName.replace('\?', '').replace('\/', ''); // eslint-disable-line
       }
       return CGIName;
   }
@@ -141,7 +145,7 @@
       }
   }
 
-  function getIfCurrentUsageExceed() {
+  function getIfCurrentUsageExceed(maxLogSize) {
       return __awaiter(this, void 0, void 0, function () {
           return __generator(this, function (_a) {
               try {
@@ -151,14 +155,16 @@
                               return usage >= quota || usage >= MAX_LOG_SIZE;
                           })];
                   }
-                  else if (window.navigator && window.navigator.webkitTemporaryStorage && window.navigator.webkitTemporaryStorage.queryUsageAndQuota) {
-                      return [2 /*return*/, window.navigator.webkitTemporaryStorage.queryUsageAndQuota(function (usedBytes, grantedBytes) {
-                              return usedBytes > grantedBytes || usedBytes >= MAX_LOG_SIZE;
+                  else if (window.navigator && window.navigator.webkitTemporaryStorage
+                      && window.navigator.webkitTemporaryStorage.queryUsageAndQuota) {
+                      return [2 /*return*/, new Promise(function (resolve) {
+                              window.navigator.webkitTemporaryStorage
+                                  .queryUsageAndQuota(function (usedBytes, grantedBytes) {
+                                  resolve(usedBytes > grantedBytes || usedBytes >= MAX_LOG_SIZE);
+                              });
                           })];
                   }
-                  else {
-                      return [2 /*return*/, false];
-                  }
+                  return [2 /*return*/, false];
               }
               catch (e) {
                   return [2 /*return*/, false];
@@ -172,17 +178,36 @@
       /**
        * 支持读写
        */
-      'READ_WRITE': 'readwrite',
+      READ_WRITE: 'readwrite',
       /**
        * 只支持读
        */
-      'READ_ONLY': 'readonly'
+      READ_ONLY: 'readonly',
   };
+  // 从上报的错误日志里提取出关于满容的错误
+  var NoEnoughSpace = [
+      'enough space',
+      'full disk',
+      'Maximum key generator',
+      'large IndexedDB value'
+  ];
+  function isMatchErrorType(errorMsg, errorTypeList) {
+      var isMatch = false;
+      if (errorTypeList.length) {
+          errorTypeList.forEach(function (errorType) {
+              if (errorMsg.indexOf(errorType) > -1) {
+                  isMatch = true;
+                  return;
+              }
+          });
+      }
+      return isMatch;
+  }
   var MPIndexedDB = /** @class */ (function () {
       function MPIndexedDB(config, poolHandler) {
-          this.defaultDbName = "mplog";
+          this.defaultDbName = 'mplog';
           this.defaultDbStoreName = 'logs';
-          this.dbStatus = DB_Status.INITING;
+          this.dbStatus = DBStatus.INITING;
           this.currentErrorNum = 0;
           this.maxRetryCount = 3;
           this.currentRetryCount = 0;
@@ -192,7 +217,8 @@
           this.DB_NAME = config && config.dbName ? config.dbName : this.defaultDbName;
           this.DB_STORE_NAME = config && config.dbStoreName ? config.dbStoreName : this.defaultDbStoreName;
           this.DB_VERSION = config && typeof config.dbVersion !== 'undefined' ? config.dbVersion : 1;
-          this.indexedDB = window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB || window.msIndexedDB;
+          this.indexedDB = window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB
+              || window.msIndexedDB;
           this.onupgradeneeded = config && config.onupgradeneeded ? config.onupgradeneeded : null;
           this.maxErrorNum = config && config.maxErrorNum ? config.maxErrorNum : 3;
           this.poolHandler = poolHandler;
@@ -200,166 +226,6 @@
           this.BadJsReport = config && config.BadJsReport ? config.BadJsReport : null;
           this.init();
       }
-      MPIndexedDB.prototype.init = function () {
-          try {
-              this.createDB();
-          }
-          catch (e) {
-              console.log('Mplog createDB failed');
-          }
-      };
-      MPIndexedDB.prototype.createDB = function () {
-          var _this = this;
-          if (!this.indexedDB) {
-              this.throwError(ErrorLevel.serious, 'your browser not support IndexedDB.');
-              return;
-          }
-          if (this.dbStatus !== DB_Status.INITING) {
-              this.throwError(ErrorLevel.serious, 'indexedDB init error');
-              return;
-          }
-          var request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
-          request.onerror = function (e) {
-              _this.checkDB(e);
-              var errLvl = ErrorLevel.serious;
-              if (e.target.error && e.target.error.name === 'VersionError') { // 打开低版本数据库导致失败
-                  try {
-                      var messgae = e.target.error.message;
-                      var regexp = /The requested version \([0-9]+\) is less than the existing version \([0-9]\)/;
-                      var isVersionLowError = messgae.search(regexp);
-                      if (isVersionLowError > -1) {
-                          var existVersion = messgae.match(/[0-9]+/ig)[1];
-                          if (existVersion > _this.DB_VERSION) {
-                              _this.DB_VERSION = existVersion;
-                          }
-                      }
-                  }
-                  catch (e) {
-                      console.log(e);
-                  }
-                  errLvl = ErrorLevel.fatal; // 致命错误
-                  _this.dbStatus = DB_Status.FAILED;
-              }
-              _this.throwError(errLvl, 'indexedDB open error', e.target.error);
-          };
-          request.onsuccess = function (e) {
-              if (_this.dbStatus !== DB_Status.INITING) { // 可能onupgradeneeded执行有问题
-                  return;
-              }
-              _this.db = e.target.result;
-              _this.dbStatus = DB_Status.INITED;
-              // 数据库错误
-              _this.db.onerror = function (er) { return _this.throwError(ErrorLevel.serious, 'indexedDB error', er.target.error); };
-              // 其他MPlog对象打开了一个更新版本的数据库，或者数据库被删除时，此数据库链接要关闭
-              _this.db.onversionchange = function (event) {
-                  _this.db.close();
-                  _this.dbStatus = DB_Status.FAILED;
-                  _this.currentRetryCount = _this.maxRetryCount + 1; // 不需要重试了
-                  _this.throwError(ErrorLevel.fatal, 'indexedDB version change', event.target.error);
-              };
-              try {
-                  _this.poolHandler.consume();
-              }
-              catch (e) {
-                  _this.throwError(ErrorLevel.fatal, 'consume pool error', e);
-              }
-              if (!!_this.keep7Days) {
-                  setTimeout(function () {
-                      if (_this.dbStatus !== DB_Status.INITED) {
-                          _this.poolHandler.push(function () {
-                              return _this.keep(3);
-                          });
-                      }
-                      else {
-                          _this.keep(3); // 保留3天数据
-                      }
-                  }, 1000);
-              }
-          };
-          request.onblocked = function () {
-              _this.throwError(ErrorLevel.serious, 'indexedDB is blocked');
-          };
-          request.onupgradeneeded = function (e) {
-              _this.db = e.target.result;
-              try {
-                  if (typeof _this.onupgradeneeded === 'function') {
-                      _this.onupgradeneeded(e);
-                  }
-                  else {
-                      if (!_this.db.objectStoreNames.contains(_this.DB_STORE_NAME)) { // 没有store则创建
-                          var objectStore = _this.db.createObjectStore(_this.DB_STORE_NAME, {
-                              autoIncrement: true
-                          });
-                          objectStore.createIndex('location', 'location', {
-                              unique: false
-                          });
-                          objectStore.createIndex('level', 'level', {
-                              unique: false
-                          });
-                          objectStore.createIndex('description', 'description', {
-                              unique: false
-                          });
-                          objectStore.createIndex('data', 'data', {
-                              unique: false
-                          });
-                          objectStore.createIndex('timestamp', 'timestamp', {
-                              unique: false
-                          });
-                      }
-                  }
-              }
-              catch (event) {
-                  _this.dbStatus = DB_Status.FAILED;
-                  _this.throwError(ErrorLevel.fatal, 'indexedDB upgrade error', event);
-              }
-          };
-      };
-      MPIndexedDB.prototype.checkCurrentStorage = function () {
-          return __awaiter(this, void 0, void 0, function () {
-              return __generator(this, function (_a) {
-                  switch (_a.label) {
-                      case 0: return [4 /*yield*/, getIfCurrentUsageExceed()];
-                      case 1:
-                          if (_a.sent()) {
-                              this.clean();
-                          }
-                          return [2 /*return*/];
-                  }
-              });
-          });
-      };
-      MPIndexedDB.prototype.checkDB = function (event) {
-          // 如果系统提示满容，或者超过限制容量清理
-          if (event && event.target && event.target.error && event.target.error.name === 'QuotaExceededError') { // 硬盘容量满了，清下日志
-              this.clean();
-          }
-      };
-      MPIndexedDB.prototype.getTransaction = function (transactionType) {
-          var _this = this;
-          var transaction = null;
-          if (this.dbStatus === DB_Status.FAILED) {
-              transaction = null;
-          }
-          else {
-              try {
-                  transaction = this.db.transaction(this.DB_STORE_NAME, transactionType);
-              }
-              catch (e) {
-                  transaction = null;
-              }
-              if (transaction) {
-                  transaction.onerror = function (event) {
-                      event.stopPropagation();
-                      return _this.throwError(ErrorLevel.fatal, 'transaction is error');
-                  };
-                  transaction.onabort = function (event) {
-                      event.stopPropagation();
-                      _this.checkDB(event);
-                  };
-              }
-          }
-          return transaction;
-      };
       MPIndexedDB.prototype.insertItems = function (bufferList) {
           var _this = this;
           this.checkCurrentStorage();
@@ -414,7 +280,7 @@
                           location: cursor.value.location,
                           description: cursor.value.description,
                           data: cursor.value.data,
-                          timestamp: cursor.value.timestamp
+                          timestamp: cursor.value.timestamp,
                       });
                       cursor["continue"]();
                   }
@@ -433,13 +299,13 @@
               _this.throwError(ErrorLevel.serious, 'clean database failed', event.target.error);
           };
           request.onsuccess = function () {
-              _this.currentCleanTime++;
+              _this.currentCleanTime += 1;
               if (_this.currentCleanTime <= _this.MAX_CLEAN_TIME) {
-                  _this.dbStatus = DB_Status.INITING;
+                  _this.dbStatus = DBStatus.INITING;
                   _this.createDB();
               }
               else {
-                  _this.dbStatus = DB_Status.FAILED;
+                  _this.dbStatus = DBStatus.FAILED;
               }
           };
       };
@@ -452,38 +318,40 @@
           }
           var store = transaction.objectStore(this.DB_STORE_NAME);
           if (!saveDays) {
-              store.clear().onerror = function (event) {
-                  return _this.throwError(ErrorLevel.serious, 'indexedb_keep_clear', event.target.error);
-              };
+              store.clear().onerror = function (event) { return _this.throwError(ErrorLevel.serious, 'indexedb_keep_clear', event.target.error); };
           }
           else {
               // 删除过期数据
               var range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
               var keyRange = IDBKeyRange.upperBound(range); // timestamp<=range，证明过期
-              var request = store.index('timestamp').openCursor(keyRange);
-              request.onsuccess = function (event) {
-                  var cursor = event.target.result;
-                  if (cursor) {
-                      cursor["delete"]();
-                      cursor["continue"]();
-                  }
-              };
-              request.onerror = function (event) {
-                  return _this.throwError(ErrorLevel.normal, 'keep logs error', event.target.error);
-              };
+              if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
+                  var request = store.index('timestamp').openCursor(keyRange);
+                  request.onsuccess = function (event) {
+                      _this.throwError(ErrorLevel.unused, 'keep logs success');
+                      var cursor = event.target.result;
+                      if (cursor) {
+                          cursor["delete"]();
+                          cursor["continue"]();
+                      }
+                  };
+                  request.onerror = function (event) { return _this.throwError(ErrorLevel.normal, 'keep logs error', event.target.error); };
+              }
+              else {
+                  this.throwError(ErrorLevel.fatal, 'the store has no timestamp index');
+              }
           }
       };
       MPIndexedDB.prototype.throwError = function (errorLevel, errorMsg, error) {
           var _this = this;
           this.currentErrorNum += errorLevel;
           if (this.currentErrorNum >= this.maxErrorNum) {
-              this.dbStatus = DB_Status.FAILED;
+              this.dbStatus = DBStatus.FAILED;
               this.poolHandler.pool = [];
               this.currentErrorNum = 0;
           }
           var errorStr = '';
           if (error) {
-              errorMsg = errorMsg + ':' + (error.message || error.stack || error.name);
+              errorMsg = errorMsg + ":" + (error.message || error.stack || error.name);
               errorStr = error.toString();
           }
           console.error && console.error("Mplog: error msg: " + errorMsg + ", error detail: " + errorStr);
@@ -495,23 +363,211 @@
               }
           }
           catch (e) { }
-          if (this.dbStatus === DB_Status.FAILED) {
+          if (isMatchErrorType(errorStr || errorMsg, NoEnoughSpace)) {
+              this.clean();
+              return;
+          }
+          if (this.dbStatus === DBStatus.FAILED) {
               this.timer = setInterval(function () {
                   _this.retryDBConnection();
               }, this.retryInterval);
           }
       };
       MPIndexedDB.prototype.retryDBConnection = function () {
-          this.currentRetryCount++;
+          this.currentRetryCount += 1;
           if (this.currentRetryCount > this.maxRetryCount) {
-              this.dbStatus = DB_Status.FAILED;
+              this.dbStatus = DBStatus.FAILED;
               this.poolHandler.pool = [];
           }
           else {
-              this.dbStatus = DB_Status.INITING;
+              this.dbStatus = DBStatus.INITING;
               this.createDB();
           }
           clearInterval(this.timer);
+      };
+      MPIndexedDB.prototype.init = function () {
+          try {
+              this.createDB();
+          }
+          catch (e) {
+              console.log('Mplog createDB failed');
+          }
+      };
+      MPIndexedDB.prototype.createDB = function () {
+          return __awaiter(this, void 0, void 0, function () {
+              var _a, request;
+              var _this = this;
+              return __generator(this, function (_b) {
+                  switch (_b.label) {
+                      case 0:
+                          if (!this.indexedDB) {
+                              this.throwError(ErrorLevel.serious, 'your browser not support IndexedDB.');
+                              return [2 /*return*/];
+                          }
+                          if (this.dbStatus !== DBStatus.INITING) {
+                              this.throwError(ErrorLevel.serious, 'indexedDB init error');
+                              return [2 /*return*/];
+                          }
+                          _a = getIfCurrentUsageExceed();
+                          if (!_a) return [3 /*break*/, 2];
+                          return [4 /*yield*/, getIfCurrentUsageExceed()];
+                      case 1:
+                          _a = (_b.sent());
+                          _b.label = 2;
+                      case 2:
+                          // 如果数据库超过100MB就什么都不做
+                          if (_a) {
+                              this.dbStatus = DBStatus.FAILED;
+                              this.currentRetryCount = this.maxRetryCount + 1;
+                              this.throwError(ErrorLevel.unused, 'the db size is too large');
+                              return [2 /*return*/];
+                          }
+                          else {
+                              this.throwError(ErrorLevel.unused, 'the db size is lower than 100MB');
+                          }
+                          request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+                          request.onerror = function (e) {
+                              _this.checkDB(e);
+                              var errLvl = ErrorLevel.serious;
+                              if (e.target.error && e.target.error.name === 'VersionError') { // 打开低版本数据库导致失败
+                                  try {
+                                      var messgae = e.target.error.message;
+                                      var regexp = /The requested version \([0-9]+\) is less than the existing version \([0-9]\)/;
+                                      var isVersionLowError = messgae.search(regexp);
+                                      if (isVersionLowError > -1) {
+                                          var existVersion = messgae.match(/[0-9]+/ig)[1];
+                                          if (existVersion > _this.DB_VERSION) {
+                                              _this.DB_VERSION = existVersion;
+                                          }
+                                      }
+                                  }
+                                  catch (e) {
+                                      console.log(e);
+                                  }
+                                  errLvl = ErrorLevel.fatal; // 致命错误
+                                  _this.dbStatus = DBStatus.FAILED;
+                              }
+                              _this.throwError(errLvl, 'indexedDB open error', e.target.error);
+                          };
+                          request.onsuccess = function (e) {
+                              if (_this.dbStatus !== DBStatus.INITING) { // 可能onupgradeneeded执行有问题
+                                  return;
+                              }
+                              _this.db = e.target.result;
+                              _this.dbStatus = DBStatus.INITED;
+                              // 数据库错误
+                              _this.db.onerror = function (er) { return _this.throwError(ErrorLevel.serious, 'indexedDB error', er.target.error); };
+                              // 其他MPlog对象打开了一个更新版本的数据库，或者数据库被删除时，此数据库链接要关闭
+                              _this.db.onversionchange = function (event) {
+                                  _this.db.close();
+                                  _this.dbStatus = DBStatus.FAILED;
+                                  _this.currentRetryCount = _this.maxRetryCount + 1; // 不需要重试了
+                                  _this.throwError(ErrorLevel.fatal, 'indexedDB version change', event.target.error);
+                              };
+                              try {
+                                  _this.poolHandler.consume();
+                              }
+                              catch (e) {
+                                  _this.throwError(ErrorLevel.fatal, 'consume pool error', e);
+                              }
+                              if (!!_this.keep7Days) {
+                                  setTimeout(function () {
+                                      if (_this.dbStatus !== DBStatus.INITED) {
+                                          _this.poolHandler.push(function () { return _this.keep(3); });
+                                      }
+                                      else {
+                                          _this.keep(3); // 保留3天数据
+                                      }
+                                  }, 1000);
+                              }
+                          };
+                          request.onblocked = function () {
+                              _this.throwError(ErrorLevel.serious, 'indexedDB is blocked');
+                          };
+                          request.onupgradeneeded = function (e) {
+                              _this.db = e.target.result;
+                              try {
+                                  if (typeof _this.onupgradeneeded === 'function') {
+                                      _this.onupgradeneeded(e);
+                                  }
+                                  else {
+                                      if (!_this.db.objectStoreNames.contains(_this.DB_STORE_NAME)) { // 没有store则创建
+                                          var objectStore = _this.db.createObjectStore(_this.DB_STORE_NAME, {
+                                              autoIncrement: true,
+                                          });
+                                          objectStore.createIndex('location', 'location', {
+                                              unique: false,
+                                          });
+                                          objectStore.createIndex('level', 'level', {
+                                              unique: false,
+                                          });
+                                          objectStore.createIndex('description', 'description', {
+                                              unique: false,
+                                          });
+                                          objectStore.createIndex('data', 'data', {
+                                              unique: false,
+                                          });
+                                          objectStore.createIndex('timestamp', 'timestamp', {
+                                              unique: false,
+                                          });
+                                      }
+                                  }
+                              }
+                              catch (event) {
+                                  _this.dbStatus = DBStatus.FAILED;
+                                  _this.throwError(ErrorLevel.fatal, 'indexedDB upgrade error', event);
+                              }
+                          };
+                          return [2 /*return*/];
+                  }
+              });
+          });
+      };
+      MPIndexedDB.prototype.checkCurrentStorage = function () {
+          return __awaiter(this, void 0, void 0, function () {
+              return __generator(this, function (_a) {
+                  switch (_a.label) {
+                      case 0: return [4 /*yield*/, getIfCurrentUsageExceed()];
+                      case 1:
+                          if (_a.sent()) {
+                              this.clean();
+                          }
+                          return [2 /*return*/];
+                  }
+              });
+          });
+      };
+      MPIndexedDB.prototype.checkDB = function (event) {
+          // 如果系统提示满容，或者超过限制容量清理
+          if (event && event.target && event.target.error && event.target.error.name === 'QuotaExceededError') { // 硬盘容量满了，清下日志
+              this.clean();
+          }
+      };
+      MPIndexedDB.prototype.getTransaction = function (transactionType) {
+          var _this = this;
+          var transaction = null;
+          if (this.dbStatus === DBStatus.FAILED) {
+              transaction = null;
+          }
+          else {
+              try {
+                  transaction = this.db.transaction(this.DB_STORE_NAME, transactionType);
+              }
+              catch (e) {
+                  transaction = null;
+              }
+              if (transaction) {
+                  transaction.onerror = function (event) {
+                      event.stopPropagation();
+                      return _this.throwError(ErrorLevel.fatal, 'transaction is error');
+                  };
+                  transaction.onabort = function (event) {
+                      event.stopPropagation();
+                      _this.checkDB(event);
+                  };
+              }
+          }
+          return transaction;
       };
       return MPIndexedDB;
   }());
@@ -556,17 +612,43 @@
       LogController.prototype.log = function (location, level, description, data) {
           var date = new Date();
           var value = {
-              'time': formatTime(date),
-              'location': location,
-              'level': level,
-              'description': description,
-              'data': this.dealLength(this.filterFunction(data)),
-              'timestamp': date.getTime() // 时间戳，单位毫秒
+              time: formatTime(date),
+              location: location,
+              level: level,
+              description: description,
+              data: this.dealLength(this.filterFunction(data)),
+              timestamp: date.getTime(),
           };
           this.bufferLog.push(value);
           if (this.bufferLog.length >= this.bufferSize) {
               this.flush();
           }
+      };
+      LogController.prototype.flush = function () {
+          var _this = this;
+          if (this.bufferLog.length === 0) {
+              return false;
+          }
+          if (this.mpIndexedDB.dbStatus !== DBStatus.INITED) {
+              return this.poolHandler.push(function () { return _this.flush(); });
+          }
+          this.mpIndexedDB.insertItems(this.bufferLog);
+          this.bufferLog = [];
+          return 0;
+      };
+      LogController.prototype.get = function (from, to, dealFun, successCb) {
+          var _this = this;
+          if (this.mpIndexedDB.dbStatus !== DBStatus.INITED) {
+              return this.poolHandler.push(function () { return _this.get(from, to, dealFun, successCb); });
+          }
+          this.mpIndexedDB.get(from, to, dealFun, successCb);
+      };
+      LogController.prototype.keep = function (saveDays) {
+          var _this = this;
+          if (this.mpIndexedDB.dbStatus !== DBStatus.INITED) {
+              return this.poolHandler.push(function () { return _this.keep(saveDays); });
+          }
+          this.mpIndexedDB.keep(saveDays);
       };
       LogController.prototype.dealLength = function (logValue) {
           if (typeof this.maxLogSize === 'number' && typeof logValue === 'string' && logValue.length >= this.maxLogSize) {
@@ -577,7 +659,7 @@
       LogController.prototype.filterFunction = function (obj) {
           var newObj = {};
           try {
-              if (typeof obj == 'undefined') {
+              if (typeof obj === 'undefined') {
                   return '';
               }
               // 函数则转为字符串
@@ -600,38 +682,6 @@
               console.log(e);
           }
       };
-      LogController.prototype.flush = function () {
-          var _this = this;
-          if (this.bufferLog.length === 0) {
-              return false;
-          }
-          if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
-              return this.poolHandler.push(function () {
-                  return _this.flush();
-              });
-          }
-          this.mpIndexedDB.insertItems(this.bufferLog);
-          this.bufferLog = [];
-          return 0;
-      };
-      LogController.prototype.get = function (from, to, dealFun, successCb) {
-          var _this = this;
-          if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
-              return this.poolHandler.push(function () {
-                  return _this.get(from, to, dealFun, successCb);
-              });
-          }
-          this.mpIndexedDB.get(from, to, dealFun, successCb);
-      };
-      LogController.prototype.keep = function (saveDays) {
-          var _this = this;
-          if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
-              return this.poolHandler.push(function () {
-                  return _this.keep(saveDays);
-              });
-          }
-          this.mpIndexedDB.keep(saveDays);
-      };
       return LogController;
   }());
 
@@ -641,12 +691,10 @@
    */
   var Mplogd = /** @class */ (function () {
       function Mplogd(config) {
-          this.defaultAjaxFilter = function (ajaxUrl) {
-              return IgnoreCGIName.indexOf(getLocationCGIName(ajaxUrl)) === -1;
-          };
           this.xhrOpen = XMLHttpRequest.prototype.open;
           // xhr 原生 send 方法
           this.xhrSend = XMLHttpRequest.prototype.send;
+          this.defaultAjaxFilter = function (ajaxUrl) { return IgnoreCGIName.indexOf(getLocationCGIName(ajaxUrl)) === -1; };
           // 当前页面链接
           this.location = config && config.location ? config.location : window.location.href;
           // 是否自动记录错误信息
@@ -655,87 +703,10 @@
           this.autoLogRejection = config && typeof config.autoLogRejection !== 'undefined' ? config.autoLogRejection : false;
           // 是否自动记录AJAX请求
           this.autoLogAjax = config && typeof config.autoLogAjax !== 'undefined' ? config.autoLogAjax : false;
-          this.logAjaxFilter = config && config.logAjaxFilter && config.logAjaxFilter ? config.logAjaxFilter : this.defaultAjaxFilter;
+          this.logAjaxFilter = config && config.logAjaxFilter ? config.logAjaxFilter : this.defaultAjaxFilter;
           this.logController = new LogController(config);
           this.bindEvent();
       }
-      Mplogd.prototype.bindEvent = function () {
-          var _this = this;
-          // 页面错误
-          if (this.autoLogError) {
-              window.addEventListener('error', function (err) {
-                  _this.error("[OnError]: " + err.message, "(" + err.lineno + "_(\"\u884C\")" + err.colno + "_(\"\u5217\"))");
-              });
-          }
-          // promise请求被reject
-          if (this.autoLogRejection) {
-              window.addEventListener('unhandledrejection', function (err) {
-                  _this.error('[OnRejection]:', err.reason);
-              });
-          }
-          this.ajaxHanler();
-          this.saveUnstoreData();
-      };
-      Mplogd.prototype.ajaxHanler = function () {
-          if (this.autoLogAjax) {
-              var that_1 = this;
-              var lajaxMethod;
-              var lajaxUrl;
-              XMLHttpRequest.prototype.open = function open() {
-                  var args = [];
-                  for (var _i = 0; _i < arguments.length; _i++) {
-                      args[_i] = arguments[_i];
-                  }
-                  lajaxMethod = args[0];
-                  lajaxUrl = resolveUrl(args[1]);
-                  that_1.xhrOpen.apply(this, args);
-              };
-              XMLHttpRequest.prototype.send = function send() {
-                  var args = [];
-                  for (var _i = 0; _i < arguments.length; _i++) {
-                      args[_i] = arguments[_i];
-                  }
-                  var startTime = new Date().getTime();
-                  var ajaxRequestId = +new Date();
-                  if (that_1.logAjaxFilter && that_1.logAjaxFilter(lajaxUrl, lajaxMethod) || !that_1.logAjaxFilter) {
-                      var requestMsg = "[ajax] id:" + ajaxRequestId + " request " + lajaxUrl + " " + lajaxMethod;
-                      lajaxMethod.toLowerCase() === 'post' ? that_1.info(requestMsg, args[0]) : that_1.info(requestMsg);
-                  }
-                  // 添加 readystatechange 事件
-                  this.addEventListener('readystatechange', function changeEvent() {
-                      var infoMsg = '';
-                      // 排除掉用户自定义不需要记录日志的 ajax
-                      if (that_1.logAjaxFilter && that_1.logAjaxFilter(lajaxUrl, lajaxMethod) || !that_1.logAjaxFilter) {
-                          try {
-                              if (this.readyState === XMLHttpRequest.DONE) {
-                                  var endTime = new Date().getTime();
-                                  // 请求耗时
-                                  var costTime = (endTime - startTime) / 1000;
-                                  that_1.info("[ajax] id:" + ajaxRequestId + " response " + this.status + " " + lajaxUrl + " " + costTime, this.responseText);
-                              }
-                          }
-                          catch (err) {
-                              infoMsg = "[ajax] id:" + ajaxRequestId + " response " + this.status + " " + lajaxUrl;
-                              lajaxMethod.toLowerCase() === 'post' ? that_1.error(infoMsg, args[0]) : that_1.error(infoMsg);
-                          }
-                      }
-                  });
-                  that_1.xhrSend.apply(this, args);
-              };
-          }
-      };
-      Mplogd.prototype.saveUnstoreData = function () {
-          var _this = this;
-          window.addEventListener('beforeunload', function (event) {
-              try {
-                  _this.logController.flush();
-              }
-              catch (e) {
-                  console.log(e);
-              }
-              return null; // 阻止弹框
-          });
-      };
       Mplogd.prototype.info = function (description, data) {
           this.logController.log(this.location, LevelEnum.info, description, data);
       };
@@ -757,6 +728,83 @@
       };
       Mplogd.prototype.keep = function (saveDays) {
           this.logController.keep(saveDays);
+      };
+      Mplogd.prototype.bindEvent = function () {
+          var _this = this;
+          // 页面错误
+          if (this.autoLogError) {
+              window.addEventListener('error', function (err) {
+                  _this.error("[OnError]: " + err.message, "(" + err.lineno + "_(\"\u884C\")" + err.colno + "_(\"\u5217\"))");
+              });
+          }
+          // promise请求被reject
+          if (this.autoLogRejection) {
+              window.addEventListener('unhandledrejection', function (err) {
+                  _this.error('[OnRejection]:', err.reason);
+              });
+          }
+          this.ajaxHanler();
+          this.saveUnstoreData();
+      };
+      Mplogd.prototype.ajaxHanler = function () {
+          if (this.autoLogAjax) {
+              var that_1 = this; // eslint-disable-line
+              var lajaxMethod_1;
+              var lajaxUrl_1;
+              XMLHttpRequest.prototype.open = function open() {
+                  var args = [];
+                  for (var _i = 0; _i < arguments.length; _i++) {
+                      args[_i] = arguments[_i];
+                  }
+                  lajaxMethod_1 = args[0];
+                  lajaxUrl_1 = resolveUrl(args[1]);
+                  that_1.xhrOpen.apply(this, args);
+              };
+              XMLHttpRequest.prototype.send = function send() {
+                  var args = [];
+                  for (var _i = 0; _i < arguments.length; _i++) {
+                      args[_i] = arguments[_i];
+                  }
+                  var startTime = new Date().getTime();
+                  var ajaxRequestId = +new Date();
+                  if ((that_1.logAjaxFilter && that_1.logAjaxFilter(lajaxUrl_1, lajaxMethod_1)) || !that_1.logAjaxFilter) {
+                      var requestMsg = "[ajax] id:" + ajaxRequestId + " request " + lajaxUrl_1 + " " + lajaxMethod_1;
+                      lajaxMethod_1.toLowerCase() === 'post' ? that_1.info(requestMsg, args[0]) : that_1.info(requestMsg);
+                  }
+                  // 添加 readystatechange 事件
+                  this.addEventListener('readystatechange', function changeEvent() {
+                      var infoMsg = '';
+                      // 排除掉用户自定义不需要记录日志的 ajax
+                      if ((that_1.logAjaxFilter && that_1.logAjaxFilter(lajaxUrl_1, lajaxMethod_1)) || !that_1.logAjaxFilter) {
+                          try {
+                              if (this.readyState === XMLHttpRequest.DONE) {
+                                  var endTime = new Date().getTime();
+                                  // 请求耗时
+                                  var costTime = (endTime - startTime) / 1000;
+                                  that_1.info("[ajax] id:" + ajaxRequestId + " response " + this.status + " " + lajaxUrl_1 + " " + costTime, this.responseText);
+                              }
+                          }
+                          catch (err) {
+                              infoMsg = "[ajax] id:" + ajaxRequestId + " response " + this.status + " " + lajaxUrl_1;
+                              lajaxMethod_1.toLowerCase() === 'post' ? that_1.error(infoMsg, args[0]) : that_1.error(infoMsg);
+                          }
+                      }
+                  });
+                  that_1.xhrSend.apply(this, args);
+              };
+          }
+      };
+      Mplogd.prototype.saveUnstoreData = function () {
+          var _this = this;
+          window.addEventListener('beforeunload', function () {
+              try {
+                  _this.logController.flush();
+              }
+              catch (e) {
+                  console.log(e);
+              }
+              return null; // 阻止弹框
+          });
       };
       return Mplogd;
   }());

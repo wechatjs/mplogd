@@ -47,6 +47,10 @@ export const DBStatus  = { //eslint-disable-line
 
 export const ErrorLevel = {
   /**
+   * 只用于上报的错误
+   */
+  unused: 0,
+  /**
    * 一般级别错误
    */
   normal: 1,
@@ -77,4 +81,6 @@ export const LevelEnum = {
 
 export const IgnoreCGIName = ['mplog', 'report', 'webcommreport'];
 
-export const MAX_LOG_SIZE = 100000000; // 100MB
+export const MAX_LOG_SIZE = 40000000; // 100MB
+
+export const STORAGE_MAX_SIZE = 100000000; // 100MB

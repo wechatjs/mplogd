@@ -2,7 +2,7 @@
  * @author dididong
  * @description 实际进行日志操作
  */
-import { MplogConfig, DB_Status } from '../util/config';
+import { MplogConfig, DBStatus } from '../util/config';
 import * as Util  from '../util/util';
 import { MPIndexedDB } from '../database/indexedDB';
 import { PoolHandler } from '../controller/pool_handler';
@@ -50,7 +50,7 @@ export class LogController {
       return false;
     }
 
-    if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
+    if (this.mpIndexedDB.dbStatus !== DBStatus.INITED) {
       return this.poolHandler.push(() => this.flush());
     }
     this.mpIndexedDB.insertItems(this.bufferLog);
@@ -59,14 +59,14 @@ export class LogController {
   }
 
   public get(from: Date, to: Date, dealFun?: Function, successCb?: Function): any {
-    if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
+    if (this.mpIndexedDB.dbStatus !== DBStatus.INITED) {
       return this.poolHandler.push(() => this.get(from, to, dealFun, successCb));
     }
     this.mpIndexedDB.get(from, to, dealFun, successCb);
   }
 
   public keep(saveDays: number): void {
-    if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
+    if (this.mpIndexedDB.dbStatus !== DBStatus.INITED) {
       return this.poolHandler.push(() => this.keep(saveDays));
     }
     this.mpIndexedDB.keep(saveDays);
