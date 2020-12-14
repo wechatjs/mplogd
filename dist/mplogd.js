@@ -51,7 +51,7 @@
       error: 'error',
   };
   var IgnoreCGIName = ['mplog', 'report', 'webcommreport'];
-  var MAX_LOG_SIZE = 1000000000000; // 100MB
+  var MAX_LOG_SIZE = 100000000; // 100MB
 
   function formatNumber(n) {
       n = n.toString();
@@ -146,13 +146,14 @@
   }
 
   function getIfCurrentUsageExceed(maxLogSize) {
+      if (maxLogSize === void 0) { maxLogSize = MAX_LOG_SIZE; }
       return __awaiter(this, void 0, void 0, function () {
           return __generator(this, function (_a) {
               try {
                   if (window.navigator && window.navigator.storage && window.navigator.storage.estimate) {
                       return [2 /*return*/, window.navigator.storage.estimate().then(function (_a) {
                               var quota = _a.quota, usage = _a.usage;
-                              return usage >= quota || usage >= MAX_LOG_SIZE;
+                              return usage >= quota || usage >= maxLogSize;
                           })];
                   }
                   else if (window.navigator && window.navigator.webkitTemporaryStorage
@@ -160,7 +161,7 @@
                       return [2 /*return*/, new Promise(function (resolve) {
                               window.navigator.webkitTemporaryStorage
                                   .queryUsageAndQuota(function (usedBytes, grantedBytes) {
-                                  resolve(usedBytes > grantedBytes || usedBytes >= MAX_LOG_SIZE);
+                                  resolve(usedBytes > grantedBytes || usedBytes >= maxLogSize);
                               });
                           })];
                   }
@@ -211,9 +212,8 @@
           this.currentErrorNum = 0;
           this.maxRetryCount = 3;
           this.currentRetryCount = 0;
-          this.retryInterval = 6000;
-          this.MAX_CLEAN_TIME = 2; // 最大清理次数
-          this.currentCleanTime = 0; // 目前的清理次数
+          this.retryInterval = 10000;
+          this.isRetrying = false;
           this.DB_NAME = config && config.dbName ? config.dbName : this.defaultDbName;
           this.DB_STORE_NAME = config && config.dbStoreName ? config.dbStoreName : this.defaultDbStoreName;
           this.DB_VERSION = config && typeof config.dbVersion !== 'undefined' ? config.dbVersion : 1;
@@ -227,24 +227,33 @@
           this.init();
       }
       MPIndexedDB.prototype.insertItems = function (bufferList) {
-          var _this = this;
-          this.checkCurrentStorage();
-          var request;
-          var transaction = this.getTransaction(TransactionType.READ_WRITE);
-          if (transaction === null) {
-              this.throwError(ErrorLevel.fatal, 'transaction is null');
-              return false;
-          }
-          var store = transaction.objectStore(this.DB_STORE_NAME);
-          for (var _i = 0, bufferList_1 = bufferList; _i < bufferList_1.length; _i++) {
-              var item = bufferList_1[_i];
-              request = store.put(item);
-              request.onsuccess = function () { };
-              request.onerror = function (e) {
-                  _this.checkDB(e);
-                  return _this.throwError(ErrorLevel.normal, 'add log failed', e.target.error);
-              };
-          }
+          return __awaiter(this, void 0, void 0, function () {
+              var request, transaction, store, _i, bufferList_1, item;
+              var _this = this;
+              return __generator(this, function (_a) {
+                  switch (_a.label) {
+                      case 0: return [4 /*yield*/, this.checkCurrentStorage()];
+                      case 1:
+                          _a.sent();
+                          transaction = this.getTransaction(TransactionType.READ_WRITE);
+                          if (transaction === null) {
+                              this.throwError(ErrorLevel.fatal, 'transaction is null');
+                              return [2 /*return*/, false];
+                          }
+                          store = transaction.objectStore(this.DB_STORE_NAME);
+                          for (_i = 0, bufferList_1 = bufferList; _i < bufferList_1.length; _i++) {
+                              item = bufferList_1[_i];
+                              request = store.put(item);
+                              request.onsuccess = function () { };
+                              request.onerror = function (e) {
+                                  _this.checkDB(e);
+                                  return _this.throwError(ErrorLevel.normal, 'add log failed', e.target.error);
+                              };
+                          }
+                          return [2 /*return*/];
+                  }
+              });
+          });
       };
       MPIndexedDB.prototype.get = function (from, to, dealFc, successCb) {
           var transaction = this.getTransaction(TransactionType.READ_WRITE);
@@ -293,21 +302,44 @@
       };
       MPIndexedDB.prototype.clean = function () {
           var _this = this;
-          this.db && this.db.close();
-          var request = this.indexedDB.deleteDatabase(this.DB_NAME);
-          request.onerror = function (event) {
-              _this.throwError(ErrorLevel.serious, 'clean database failed', event.target.error);
-          };
-          request.onsuccess = function () {
-              _this.currentCleanTime += 1;
-              if (_this.currentCleanTime <= _this.MAX_CLEAN_TIME) {
-                  _this.dbStatus = DBStatus.INITING;
-                  _this.createDB();
-              }
-              else {
-                  _this.dbStatus = DBStatus.FAILED;
-              }
-          };
+          // indexeddb中当遇到容量大时不能直接deleteDatabase 或者clearStore涉及到
+          var transaction = this.getTransaction(TransactionType.READ_WRITE);
+          if (transaction === null) {
+              this.throwError(ErrorLevel.fatal, 'transaction is null');
+              return;
+          }
+          // 删除2/3的数据
+          var store = transaction.objectStore(this.DB_STORE_NAME);
+          var range = Date.now();
+          var keyRange = IDBKeyRange.upperBound(range);
+          this.dbStatus = DBStatus.FAILED;
+          if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
+              var request_1 = store.index('timestamp').getAllKeys(keyRange);
+              request_1.onsuccess = function () {
+                  var resp = request_1.result;
+                  if (resp && resp.length) {
+                      var storeCount = resp.length;
+                      var endCount = Math.ceil(storeCount / 3 * 2);
+                      var begin = resp[0];
+                      var end = resp[endCount];
+                      var deleteKeyRange = IDBKeyRange.bound(begin, end, false, false);
+                      var deleteRequest = store["delete"](deleteKeyRange);
+                      deleteRequest.onsuccess = function () {
+                          store.count().onsuccess = function (e) { console.log(e.target.result); };
+                          console.log('deleting success', Date.now());
+                          _this.throwError(ErrorLevel.fatal, 'clean database success');
+                      };
+                      deleteRequest.onerror = function (event) {
+                          _this.currentRetryCount = _this.maxRetryCount + 1;
+                          _this.throwError(ErrorLevel.fatal, 'clean database fail', event.target.error);
+                      };
+                  }
+              };
+              request_1.onerror = function (e) {
+                  _this.currentRetryCount = _this.maxRetryCount + 1;
+                  _this.throwError(ErrorLevel.fatal, 'clean database fail', event.target.error);
+              };
+          }
       };
       MPIndexedDB.prototype.keep = function (saveDays) {
           var _this = this;
@@ -322,40 +354,12 @@
           }
           else {
               // 删除过期数据
-              // const range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
-              // const keyRange = IDBKeyRange.upperBound(range); // timestamp<=range，证明过期
-              // if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
-              //   const request = store.index('timestamp').openCursor(keyRange);
-              //   request.onsuccess = (event) => {
-              //     this.throwError(ErrorLevel.unused, 'keep logs success');
-              //     const cursor = (event.target as any).result;
-              //     if (cursor) {
-              //       cursor.delete();
-              //       cursor.continue();
-              //     }
-              //   };
-              //   request.onerror = event => this.throwError(ErrorLevel.normal, 'keep logs error', (event.target as any).error);
-              // } else {
-              //   this.throwError(ErrorLevel.fatal, 'the store has no timestamp index');
-              // }
-              // test 1
-              console.log('begin deleting.......', Date.now());
-              var range = Date.now();
+              var range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
               var keyRange = IDBKeyRange.upperBound(range);
               if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
-                  // const request = store.index('timestamp').count();
-                  // request.onsuccess = (e) => {
-                  //   console.log(request.result);
-                  // const cursor = (event.target as any).result;
-                  // console.log(cursor);
-                  // if (cursor) {
-                  //   cursor.delete();
-                  //   cursor.continue();
-                  // }
-                  // }
-                  var request_1 = store.index('timestamp').getAllKeys(keyRange);
-                  request_1.onsuccess = function (e) {
-                      var resp = request_1.result;
+                  var request_2 = store.index('timestamp').getAllKeys(keyRange);
+                  request_2.onsuccess = function () {
+                      var resp = request_2.result;
                       if (resp && resp.length) {
                           var begin = resp[0];
                           var end = resp[resp.length - 1];
@@ -396,7 +400,7 @@
               this.clean();
               return;
           }
-          if (this.dbStatus === DBStatus.FAILED) {
+          if (this.dbStatus === DBStatus.FAILED && !this.timer) {
               this.timer = setInterval(function () {
                   _this.retryDBConnection();
               }, this.retryInterval);
@@ -424,32 +428,32 @@
       };
       MPIndexedDB.prototype.createDB = function () {
           return __awaiter(this, void 0, void 0, function () {
-              var _a, request;
+              var request;
               var _this = this;
-              return __generator(this, function (_b) {
-                  switch (_b.label) {
+              return __generator(this, function (_a) {
+                  switch (_a.label) {
                       case 0:
                           if (!this.indexedDB) {
-                              this.throwError(ErrorLevel.serious, 'your browser not support IndexedDB.');
+                              this.currentRetryCount = this.maxRetryCount + 1;
+                              this.throwError(ErrorLevel.fatal, 'your browser not support IndexedDB.');
                               return [2 /*return*/];
                           }
                           if (this.dbStatus !== DBStatus.INITING) {
-                              this.throwError(ErrorLevel.serious, 'indexedDB init error');
+                              this.currentRetryCount = this.maxRetryCount + 1;
+                              this.throwError(ErrorLevel.fatal, 'indexedDB init error');
                               return [2 /*return*/];
                           }
-                          _a = getIfCurrentUsageExceed();
-                          if (!_a) return [3 /*break*/, 2];
+                          if ((window && window.navigator && window.navigator.storage) || (window && window.navigator && window.navigator.webkitTemporaryStorage)) {
+                              this.throwError(ErrorLevel.unused, 'user support storage calculation');
+                          }
+                          else {
+                              this.throwError(ErrorLevel.unused, 'user does not support storage calculation');
+                          }
                           return [4 /*yield*/, getIfCurrentUsageExceed()];
                       case 1:
-                          _a = (_b.sent());
-                          _b.label = 2;
-                      case 2:
                           // 如果数据库超过100MB就什么都不做
-                          if (_a) {
-                              this.dbStatus = DBStatus.FAILED;
-                              this.currentRetryCount = this.maxRetryCount + 1;
+                          if (_a.sent()) {
                               this.throwError(ErrorLevel.unused, 'the db size is too large');
-                              return [2 /*return*/];
                           }
                           else {
                               this.throwError(ErrorLevel.unused, 'the db size is lower than 100MB');
@@ -499,15 +503,16 @@
                               catch (e) {
                                   _this.throwError(ErrorLevel.fatal, 'consume pool error', e);
                               }
-                              // if (!!this.keep7Days) {
-                              //   setTimeout(() => { // 1秒后清理默认store的过期数据
-                              //     if (this.dbStatus !== DBStatus.INITED) {
-                              //       this.poolHandler.push(() => this.keep(3));
-                              //     } else {
-                              //       this.keep(3); // 保留3天数据
-                              //     }
-                              //   }, 1000);
-                              // }
+                              if (!!_this.keep7Days) {
+                                  setTimeout(function () {
+                                      if (_this.dbStatus !== DBStatus.INITED) {
+                                          _this.poolHandler.push(function () { return _this.keep(7); });
+                                      }
+                                      else {
+                                          _this.keep(7); // 保留3天数据
+                                      }
+                                  }, 1000);
+                              }
                           };
                           request.onblocked = function () {
                               _this.throwError(ErrorLevel.serious, 'indexedDB is blocked');
@@ -606,7 +611,7 @@
    */
   var PoolHandler = /** @class */ (function () {
       function PoolHandler() {
-          this.poolSize = 100;
+          this.poolSize = 20;
           this.pool = [];
       }
       PoolHandler.prototype.push = function (action) {
@@ -777,15 +782,15 @@
       Mplogd.prototype.ajaxHanler = function () {
           if (this.autoLogAjax) {
               var that_1 = this; // eslint-disable-line
-              var lajaxMethod_1;
-              var lajaxUrl_1;
+              var ajaxMethod_1;
+              var ajaxUrl_1;
               XMLHttpRequest.prototype.open = function open() {
                   var args = [];
                   for (var _i = 0; _i < arguments.length; _i++) {
                       args[_i] = arguments[_i];
                   }
-                  lajaxMethod_1 = args[0];
-                  lajaxUrl_1 = resolveUrl(args[1]);
+                  ajaxMethod_1 = args[0];
+                  ajaxUrl_1 = resolveUrl(args[1]);
                   that_1.xhrOpen.apply(this, args);
               };
               XMLHttpRequest.prototype.send = function send() {
@@ -795,26 +800,28 @@
                   }
                   var startTime = new Date().getTime();
                   var ajaxRequestId = +new Date();
-                  if ((that_1.logAjaxFilter && that_1.logAjaxFilter(lajaxUrl_1, lajaxMethod_1)) || !that_1.logAjaxFilter) {
-                      var requestMsg = "[ajax] id:" + ajaxRequestId + " request " + lajaxUrl_1 + " " + lajaxMethod_1;
-                      lajaxMethod_1.toLowerCase() === 'post' ? that_1.info(requestMsg, args[0]) : that_1.info(requestMsg);
+                  var url = ajaxUrl_1;
+                  var method = ajaxMethod_1;
+                  if ((that_1.logAjaxFilter && that_1.logAjaxFilter(ajaxUrl_1, ajaxMethod_1)) || !that_1.logAjaxFilter) {
+                      var requestMsg = "[ajax] id:" + ajaxRequestId + " request " + ajaxUrl_1 + " " + ajaxMethod_1;
+                      ajaxMethod_1.toLowerCase() === 'post' ? that_1.info(requestMsg, args[0]) : that_1.info(requestMsg);
                   }
                   // 添加 readystatechange 事件
                   this.addEventListener('readystatechange', function changeEvent() {
                       var infoMsg = '';
                       // 排除掉用户自定义不需要记录日志的 ajax
-                      if ((that_1.logAjaxFilter && that_1.logAjaxFilter(lajaxUrl_1, lajaxMethod_1)) || !that_1.logAjaxFilter) {
+                      if ((that_1.logAjaxFilter && that_1.logAjaxFilter(url, method)) || !that_1.logAjaxFilter) {
                           try {
                               if (this.readyState === XMLHttpRequest.DONE) {
                                   var endTime = new Date().getTime();
                                   // 请求耗时
                                   var costTime = (endTime - startTime) / 1000;
-                                  that_1.info("[ajax] id:" + ajaxRequestId + " response " + this.status + " " + lajaxUrl_1 + " " + costTime, this.responseText);
+                                  that_1.info("[ajax] id:" + ajaxRequestId + " response " + this.status + " " + url + " " + costTime, this.responseText);
                               }
                           }
                           catch (err) {
-                              infoMsg = "[ajax] id:" + ajaxRequestId + " response " + this.status + " " + lajaxUrl_1;
-                              lajaxMethod_1.toLowerCase() === 'post' ? that_1.error(infoMsg, args[0]) : that_1.error(infoMsg);
+                              infoMsg = "[ajax] id:" + ajaxRequestId + " response " + this.status + " " + url;
+                              ajaxMethod_1.toLowerCase() === 'post' ? that_1.error(infoMsg, args[0]) : that_1.error(infoMsg);
                           }
                       }
                   });

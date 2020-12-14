@@ -6,13 +6,13 @@ import { MAX_LOG_SIZE } from '../util/config';
 export async function getIfCurrentUsageExceed(maxLogSize = MAX_LOG_SIZE) {
   try {
     if (window.navigator && window.navigator.storage && (window.navigator as any).storage.estimate) {
-      return window.navigator.storage.estimate().then(({ quota, usage }) => usage >= quota || usage >= MAX_LOG_SIZE);
+      return window.navigator.storage.estimate().then(({ quota, usage }) => usage >= quota || usage >= maxLogSize);
     } else if (window.navigator && (window.navigator as any).webkitTemporaryStorage
       && (window.navigator as any).webkitTemporaryStorage.queryUsageAndQuota) {
       return new Promise((resolve) => {
         (window.navigator as any).webkitTemporaryStorage
         .queryUsageAndQuota((usedBytes, grantedBytes) => {
-         resolve(usedBytes > grantedBytes ||  usedBytes >= MAX_LOG_SIZE)
+         resolve(usedBytes > grantedBytes ||  usedBytes >= maxLogSize)
         });
       })
     }

@@ -70,15 +70,13 @@ export class MPIndexedDB {
 
   private timer: any;
 
-  private retryInterval = 6000;
+  private retryInterval = 10000;
 
   private poolHandler: PoolHandler;
 
   private keep7Days: boolean;
 
-  private MAX_CLEAN_TIME = 2; // 最大清理次数
-
-  private currentCleanTime = 0; // 目前的清理次数
+  private isRetrying:boolean = false;
 
   constructor(config: MplogConfig, poolHandler: PoolHandler) {
     this.DB_NAME = config && config.dbName ? config.dbName : this.defaultDbName;
@@ -103,8 +101,8 @@ export class MPIndexedDB {
     this.init();
   }
 
-  public insertItems(bufferList: Array<any>): any {
-    this.checkCurrentStorage();
+  public async insertItems(bufferList: Array<any>) {
+    await this.checkCurrentStorage();
     let request;
     const transaction = this.getTransaction(TransactionType.READ_WRITE);
     if (transaction === null) {
@@ -171,20 +169,44 @@ export class MPIndexedDB {
   }
 
   public clean(): void {
-    this.db && this.db.close();
-    const request = this.indexedDB.deleteDatabase(this.DB_NAME);
-    request.onerror = (event) => {
-      this.throwError(ErrorLevel.serious, 'clean database failed', (event.target as any).error);
-    };
-    request.onsuccess = () => {
-      this.currentCleanTime+=1;
-      if (this.currentCleanTime <= this.MAX_CLEAN_TIME) {
-        this.dbStatus = DBStatus.INITING;
-        this.createDB();
-      } else {
-        this.dbStatus = DBStatus.FAILED;
-      }
-    };
+    // indexeddb中当遇到容量大时不能直接deleteDatabase 或者clearStore涉及到
+    const transaction = this.getTransaction(TransactionType.READ_WRITE);
+    if (transaction === null) {
+      this.throwError(ErrorLevel.fatal, 'transaction is null');
+      return;
+    }
+    // 删除2/3的数据
+    const store = transaction.objectStore(this.DB_STORE_NAME);
+    const range = Date.now();
+    const keyRange = IDBKeyRange.upperBound(range);
+    this.dbStatus = DBStatus.FAILED;
+    if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
+      const request = store.index('timestamp').getAllKeys(keyRange);
+      request.onsuccess = () => {
+        let resp = request.result;
+        if (resp && resp.length) {
+          let storeCount = resp.length;
+          let endCount = Math.ceil(storeCount / 3 * 2);
+          let begin = resp[0];
+          let end = resp[endCount];
+          let deleteKeyRange = IDBKeyRange.bound(begin, end, false, false);
+          let deleteRequest =  store.delete(deleteKeyRange);
+          deleteRequest.onsuccess = () => {
+            store.count().onsuccess = (e) => {console.log((e.target as any).result)};
+            console.log('deleting success', Date.now());
+            this.throwError(ErrorLevel.fatal, 'clean database success');
+          };
+          deleteRequest.onerror = (event) => {
+            this.currentRetryCount = this.maxRetryCount + 1;
+            this.throwError(ErrorLevel.fatal, 'clean database fail', (event.target as any).error);
+          };
+        }
+      };
+      request.onerror = (e) => {
+        this.currentRetryCount = this.maxRetryCount + 1;
+        this.throwError(ErrorLevel.fatal, 'clean database fail', (event.target as any).error);
+      };
+    }
   }
 
   public keep(saveDays?: number): void {
@@ -198,39 +220,11 @@ export class MPIndexedDB {
       store.clear().onerror = event => this.throwError(ErrorLevel.serious, 'indexedb_keep_clear', (event.target as any).error);
     } else {
       // 删除过期数据
-      // const range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
-      // const keyRange = IDBKeyRange.upperBound(range); // timestamp<=range，证明过期
-      // if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
-      //   const request = store.index('timestamp').openCursor(keyRange);
-      //   request.onsuccess = (event) => {
-      //     this.throwError(ErrorLevel.unused, 'keep logs success');
-      //     const cursor = (event.target as any).result;
-      //     if (cursor) {
-      //       cursor.delete();
-      //       cursor.continue();
-      //     }
-      //   };
-      //   request.onerror = event => this.throwError(ErrorLevel.normal, 'keep logs error', (event.target as any).error);
-      // } else {
-      //   this.throwError(ErrorLevel.fatal, 'the store has no timestamp index');
-      // }
-      // test 1
-      console.log('begin deleting.......', Date.now());
-      const range = Date.now();
+      const range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
       const keyRange = IDBKeyRange.upperBound(range);
       if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
-        // const request = store.index('timestamp').count();
-        // request.onsuccess = (e) => {
-        //   console.log(request.result);
-          // const cursor = (event.target as any).result;
-          // console.log(cursor);
-          // if (cursor) {
-          //   cursor.delete();
-          //   cursor.continue();
-          // }
-        // }
         const request = store.index('timestamp').getAllKeys(keyRange);
-        request.onsuccess = (e) => {
+        request.onsuccess = () => {
           let resp = request.result;
           if (resp && resp.length) {
             let begin = resp[0];
@@ -274,7 +268,7 @@ export class MPIndexedDB {
       return;
     }
 
-    if (this.dbStatus === DBStatus.FAILED) {
+    if (this.dbStatus === DBStatus.FAILED && !this.timer) {
       this.timer = setInterval(() => {
         this.retryDBConnection();
       }, this.retryInterval);
@@ -303,25 +297,30 @@ export class MPIndexedDB {
 
   private async createDB() {
     if (!this.indexedDB) {
-      this.throwError(ErrorLevel.serious, 'your browser not support IndexedDB.');
+      this.currentRetryCount = this.maxRetryCount + 1;
+      this.throwError(ErrorLevel.fatal, 'your browser not support IndexedDB.');
       return;
     }
 
     if (this.dbStatus !== DBStatus.INITING) {
-      this.throwError(ErrorLevel.serious, 'indexedDB init error');
+      this.currentRetryCount = this.maxRetryCount + 1;
+      this.throwError(ErrorLevel.fatal, 'indexedDB init error');
       return;
     }
 
+    if ((window && window.navigator && window.navigator.storage) || (window && window.navigator && (window.navigator as any).webkitTemporaryStorage)) {
+      this.throwError(ErrorLevel.unused, 'user support storage calculation');
+    } else {
+      this.throwError(ErrorLevel.unused, 'user does not support storage calculation');
+    }
+
     // 如果数据库超过100MB就什么都不做
-    if (getIfCurrentUsageExceed() && await getIfCurrentUsageExceed()) {
-      this.dbStatus = DBStatus.FAILED;
-      this.currentRetryCount = this.maxRetryCount + 1;
+    if (await getIfCurrentUsageExceed()) {
       this.throwError(ErrorLevel.unused, 'the db size is too large');
-      return;
     } else {
       this.throwError(ErrorLevel.unused, 'the db size is lower than 100MB');
-    } 
-   
+    }
+
     const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
     request.onerror = (e) => {
       this.checkDB(e);
@@ -367,15 +366,15 @@ export class MPIndexedDB {
         this.throwError(ErrorLevel.fatal, 'consume pool error', e);
       }
 
-      // if (!!this.keep7Days) {
-      //   setTimeout(() => { // 1秒后清理默认store的过期数据
-      //     if (this.dbStatus !== DBStatus.INITED) {
-      //       this.poolHandler.push(() => this.keep(3));
-      //     } else {
-      //       this.keep(3); // 保留3天数据
-      //     }
-      //   }, 1000);
-      // }
+      if (!!this.keep7Days) {
+        setTimeout(() => { // 1秒后清理默认store的过期数据
+          if (this.dbStatus !== DBStatus.INITED) {
+            this.poolHandler.push(() => this.keep(7));
+          } else {
+            this.keep(7); // 保留3天数据
+          }
+        }, 1000);
+      }
     };
 
     request.onblocked = () => {
@@ -419,7 +418,7 @@ export class MPIndexedDB {
   private async checkCurrentStorage() {
     if (await getIfCurrentUsageExceed()) {
       this.clean();
-    };
+    }; 
   }
 
   private checkDB(event: any): void {

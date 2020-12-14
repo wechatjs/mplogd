@@ -3,7 +3,7 @@
  * @description 管理增删改查任务
  */
 export class PoolHandler {
-  private poolSize = 100;
+  private poolSize = 20;
 
   public pool: Array<any> = [];
 
