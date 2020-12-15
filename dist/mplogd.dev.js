@@ -308,38 +308,82 @@
               this.throwError(ErrorLevel.fatal, 'transaction is null');
               return;
           }
+          this.dbStatus = DBStatus.FAILED;
           // 删除2/3的数据
           var store = transaction.objectStore(this.DB_STORE_NAME);
-          var range = Date.now();
-          var keyRange = IDBKeyRange.upperBound(range);
-          this.dbStatus = DBStatus.FAILED;
-          if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
-              var request_1 = store.index('timestamp').getAllKeys(keyRange);
-              request_1.onsuccess = function () {
-                  var resp = request_1.result;
-                  if (resp && resp.length) {
-                      var storeCount = resp.length;
-                      var endCount = Math.ceil(storeCount / 3 * 2);
-                      var begin = resp[0];
-                      var end = resp[endCount];
-                      var deleteKeyRange = IDBKeyRange.bound(begin, end, false, false);
-                      var deleteRequest = store["delete"](deleteKeyRange);
-                      deleteRequest.onsuccess = function () {
-                          store.count().onsuccess = function (e) { console.log(e.target.result); };
-                          console.log('deleting success', Date.now());
-                          _this.throwError(ErrorLevel.fatal, 'clean database success');
-                      };
-                      deleteRequest.onerror = function (event) {
-                          _this.currentRetryCount = _this.maxRetryCount + 1;
-                          _this.throwError(ErrorLevel.fatal, 'clean database fail', event.target.error);
-                      };
-                  }
+          var beginTime = Date.now();
+          var beginRequest = store.openCursor();
+          beginRequest.onsuccess = function (event) {
+              var first = event.target.result.primaryKey;
+              var countRequest = store.count();
+              console.log('first cost', Date.now() - beginTime);
+              countRequest.onsuccess = function () {
+                  var count = countRequest.result;
+                  console.log('all count', count);
+                  console.log('cost time', Date.now() - beginTime);
+                  var endCount = first + Math.ceil(count / 3);
+                  var deleteRequest = store["delete"](IDBKeyRange.bound(first, endCount, false, false));
+                  deleteRequest.onsuccess = function () {
+                      _this.throwError(ErrorLevel.unused, 'clean database success');
+                      console.log('cost time', Date.now() - beginTime);
+                  };
+                  deleteRequest.onerror = function (e) {
+                      _this.throwError(ErrorLevel.fatal, 'keep logs error', e.target.error);
+                  };
               };
-              request_1.onerror = function (e) {
-                  _this.currentRetryCount = _this.maxRetryCount + 1;
-                  _this.throwError(ErrorLevel.fatal, 'clean database fail', event.target.error);
-              };
-          }
+          };
+          // let request = store.count();
+          // request.onsuccess = () => {
+          //   let count = request.result;
+          //   let endCount = 
+          // }
+          // const range = Date.now();
+          // const keyRange = IDBKeyRange.upperBound(range);
+          // this.dbStatus = DBStatus.FAILED;
+          // if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
+          //   const timeStampIndex = store.index('timestamp');
+          //   if (!timeStampIndex.getAllKeys) {
+          //     var request = store.index('timestamp').openCursor(keyRange);
+          //     request.onsuccess = (event) => {
+          //         this.throwError(ErrorLevel.unused, 'keep logs success');
+          //         var cursor = (event.target as any).result;
+          //         if (cursor) {
+          //             cursor["delete"]();
+          //             cursor["continue"]();
+          //         }
+          //     };
+          //     request.onerror = (event) => {
+          //         return this.throwError(ErrorLevel.normal, 'keep logs error', (event.target as any).error);
+          //     };
+          //   } else {
+          //     let request = timeStampIndex.getAllKeys(keyRange);
+          //     request.onsuccess = () => {
+          //       let resp = request.result;
+          //       if (resp && resp.length) {
+          //         // let storeCount = resp.length;
+          //         // let endCount = Math.ceil(storeCount / 3 * 2);
+          //         let endCount = resp.length - 1;
+          //         let begin = resp[0];
+          //         let end = resp[endCount];
+          //         let deleteKeyRange = IDBKeyRange.bound(begin, end, false, false);
+          //         let deleteRequest =  store.delete(deleteKeyRange);
+          //         deleteRequest.onsuccess = () => {
+          //           store.count().onsuccess = (e) => {console.log((e.target as any).result)};
+          //           console.log('deleting success', Date.now());
+          //           this.throwError(ErrorLevel.fatal, 'clean database success');
+          //         };
+          //         deleteRequest.onerror = (event) => {
+          //           this.currentRetryCount = this.maxRetryCount + 1;
+          //           this.throwError(ErrorLevel.fatal, 'clean database fail', (event.target as any).error);
+          //         };
+          //       }
+          //     };
+          //     request.onerror = (event) => {
+          //       this.currentRetryCount = this.maxRetryCount + 1;
+          //       this.throwError(ErrorLevel.fatal, 'clean database fail', (event.target as any).error);
+          //     };
+          //   }
+          // }
       };
       MPIndexedDB.prototype.keep = function (saveDays) {
           var _this = this;
@@ -354,24 +398,45 @@
           }
           else {
               // 删除过期数据
-              var range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
-              var keyRange = IDBKeyRange.upperBound(range);
-              if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
-                  var request_2 = store.index('timestamp').getAllKeys(keyRange);
-                  request_2.onsuccess = function () {
-                      var resp = request_2.result;
-                      if (resp && resp.length) {
-                          var begin = resp[0];
-                          var end = resp[resp.length - 1];
-                          console.log(begin, end);
-                          var deleteKeyRange = IDBKeyRange.bound(begin, end, false, false);
-                          store["delete"](deleteKeyRange).onsuccess = function () {
-                              store.count().onsuccess = function (e) { console.log(e.target.result); };
-                              console.log('deleting success', Date.now());
+              var store_1 = transaction.objectStore(this.DB_STORE_NAME);
+              var beginTime_1 = Date.now();
+              var beginRequest = store_1.openCursor();
+              beginRequest.onsuccess = function (event) {
+                  var first = event.target.result.primaryKey;
+                  var range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
+                  var keyRange = IDBKeyRange.lowerBound(range);
+                  if (store_1.indexNames && store_1.indexNames.length && store_1.indexNames.contains('timestamp')) {
+                      var keepRequest = store_1.index('timestamp').openKeyCursor(keyRange);
+                      keepRequest.onsuccess = function (event) {
+                          var end = event.target.result.primaryKey;
+                          var deleteRequest = store_1["delete"](IDBKeyRange.bound(first, end, false, false));
+                          deleteRequest.onsuccess = function () {
+                              _this.throwError(ErrorLevel.unused, 'keep logs success');
+                              console.error('keep cost time', Date.now() - beginTime_1);
                           };
-                      }
-                  };
-              }
+                          deleteRequest.onerror = function (e) {
+                              _this.throwError(ErrorLevel.fatal, 'keep logs error', e.target.error);
+                          };
+                      };
+                  }
+              };
+              // let first = (event.target as any).result.primaryKey;
+              // const range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
+              // const keyRange = IDBKeyRange.upperBound(range);
+              // if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
+              //   const request = store.index('timestamp').getAllKeys(keyRange);
+              //   request.onsuccess = () => {
+              //     let resp = request.result;
+              //     if (resp && resp.length) {
+              //       let begin = resp[0];
+              //       let end = resp[resp.length-1];
+              //       let deleteKeyRange = IDBKeyRange.bound(begin, end, false, false);
+              //       store.delete(deleteKeyRange).onsuccess = () => {
+              //         this.throwError(ErrorLevel.unused, 'keep logs success');
+              //       };
+              //     }
+              //   };
+              // }
           }
       };
       MPIndexedDB.prototype.throwError = function (errorLevel, errorMsg, error) {
@@ -503,16 +568,16 @@
                               catch (e) {
                                   _this.throwError(ErrorLevel.fatal, 'consume pool error', e);
                               }
-                              if (!!_this.keep7Days) {
-                                  setTimeout(function () {
-                                      if (_this.dbStatus !== DBStatus.INITED) {
-                                          _this.poolHandler.push(function () { return _this.keep(7); });
-                                      }
-                                      else {
-                                          _this.keep(7); // 保留3天数据
-                                      }
-                                  }, 1000);
-                              }
+                              _this.clean();
+                              // if (!!this.keep7Days) {
+                              //   setTimeout(() => { // 1秒后清理默认store的过期数据
+                              //     if (this.dbStatus !== DBStatus.INITED) {
+                              //       this.poolHandler.push(() => this.keep(7));
+                              //     } else {
+                              //       this.keep(7); // 保留3天数据
+                              //     }
+                              //   }, 1000);
+                              // }
                           };
                           request.onblocked = function () {
                               _this.throwError(ErrorLevel.serious, 'indexedDB is blocked');
