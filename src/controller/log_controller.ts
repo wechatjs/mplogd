@@ -41,20 +41,20 @@ export class LogController {
     };
     this.bufferLog.push(value);
     if (this.bufferLog.length >= this.bufferSize) {
-      this.flush();
+      this.flush(this.bufferLog);
+      this.bufferLog = [];
     }
   }
 
-  public flush(): any {
-    if (this.bufferLog.length === 0) {
+  public flush(items): any {
+    if (items.length === 0) {
       return false;
     }
 
     if (this.mpIndexedDB.dbStatus !== DBStatus.INITED) {
-      return this.poolHandler.push(() => this.flush());
+      return this.poolHandler.push(() => this.flush(items));
     }
-    this.mpIndexedDB.insertItems(this.bufferLog);
-    this.bufferLog = [];
+    this.mpIndexedDB.insertItems(items);
     return 0;
   }
 
