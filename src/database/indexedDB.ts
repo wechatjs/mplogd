@@ -2,10 +2,10 @@
  * @author dididong
  * @description 使用indexedDB进行浏览器端存储
  */
-import { MplogConfig, DBStatus, ErrorLevel } from '../util/config';
+import { MplogConfig, DBStatus, ErrorLevel, STORAGE_MAX_SIZE } from '../util/config';
 import { PoolHandler } from '../controller/pool_handler';
 import { formatDate } from '../util/util';
-import { getIfCurrentUsageExceed } from '../util/db_size';
+import { getIfCurrentUsageExceed,} from '../util/db_size';
 
 const TransactionType = {
   /**
@@ -52,6 +52,8 @@ export class MPIndexedDB {
 
   public onupgradeneeded: Function | null;
 
+  public poolHandler: PoolHandler;
+
   private DB_NAME: string;
 
   private DB_STORE_NAME: string;
@@ -72,11 +74,7 @@ export class MPIndexedDB {
 
   private retryInterval = 10000;
 
-  private poolHandler: PoolHandler;
-
   private keep7Days: boolean;
-
-  private isRetrying:boolean = false;
 
   constructor(config: MplogConfig, poolHandler: PoolHandler) {
     this.DB_NAME = config && config.dbName ? config.dbName : this.defaultDbName;
@@ -175,83 +173,34 @@ export class MPIndexedDB {
       this.throwError(ErrorLevel.fatal, 'transaction is null');
       return;
     }
-    this.dbStatus = DBStatus.FAILED;
-    // 删除2/3的数据
-    const store = transaction.objectStore(this.DB_STORE_NAME);
-    let beginTime = Date.now();
-    let beginRequest = store.openCursor();
-    beginRequest.onsuccess = (event) => {
-      let first = (event.target as any).result.primaryKey;
-      let countRequest = store.count();
-      console.log('first cost', Date.now() - beginTime);
-      countRequest.onsuccess = () => {
-        let count = countRequest.result;
-        console.log('all count', count);
-        console.log('cost time', Date.now() - beginTime);
-        let endCount = first + Math.ceil(count / 3);
-        let deleteRequest = store.delete(IDBKeyRange.bound(first, endCount, false, false));
-        deleteRequest.onsuccess = () => {
-          this.throwError(ErrorLevel.unused, 'clean database success');
-          console.log('cost time', Date.now() - beginTime);
-        };
-        deleteRequest.onerror = (e) => {
-          this.throwError(ErrorLevel.fatal, 'keep logs error', (e.target as any).error);
-        };
+    try {
+      this.dbStatus = DBStatus.FAILED;
+      this.currentRetryCount = this.maxRetryCount + 1;
+      // 删除1/3的数据
+      const store = transaction.objectStore(this.DB_STORE_NAME);
+      let beginTime = Date.now();
+      let beginRequest = store.openCursor();
+      beginRequest.onsuccess = (event) => {
+        let result = (event.target as any).result;
+        if (result && result.primaryKey) {
+          let first = result.primaryKey;
+          let countRequest = store.count();
+          countRequest.onsuccess = () => {
+            let count = countRequest.result;
+            let endCount = first + Math.ceil(count / 3);
+            let deleteRequest = store.delete(IDBKeyRange.bound(first, endCount, false, false));
+            deleteRequest.onsuccess = () => {
+              this.throwError(ErrorLevel.unused, 'clean database success');
+            };
+            deleteRequest.onerror = (e) => {
+              this.throwError(ErrorLevel.fatal, 'clean database error', (e.target as any).error);
+            };
+          }
+        }
       }
+    } catch(e) {
+      this.throwError(ErrorLevel.unused, 'clean database error', e);
     }
-    // let request = store.count();
-    // request.onsuccess = () => {
-    //   let count = request.result;
-    //   let endCount = 
-    // }
-    // const range = Date.now();
-    // const keyRange = IDBKeyRange.upperBound(range);
-    // this.dbStatus = DBStatus.FAILED;
-    
-    // if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
-    //   const timeStampIndex = store.index('timestamp');
-    //   if (!timeStampIndex.getAllKeys) {
-    //     var request = store.index('timestamp').openCursor(keyRange);
-    //     request.onsuccess = (event) => {
-    //         this.throwError(ErrorLevel.unused, 'keep logs success');
-    //         var cursor = (event.target as any).result;
-    //         if (cursor) {
-    //             cursor["delete"]();
-    //             cursor["continue"]();
-    //         }
-    //     };
-    //     request.onerror = (event) => {
-    //         return this.throwError(ErrorLevel.normal, 'keep logs error', (event.target as any).error);
-    //     };
-    //   } else {
-    //     let request = timeStampIndex.getAllKeys(keyRange);
-    //     request.onsuccess = () => {
-    //       let resp = request.result;
-    //       if (resp && resp.length) {
-    //         // let storeCount = resp.length;
-    //         // let endCount = Math.ceil(storeCount / 3 * 2);
-    //         let endCount = resp.length - 1;
-    //         let begin = resp[0];
-    //         let end = resp[endCount];
-    //         let deleteKeyRange = IDBKeyRange.bound(begin, end, false, false);
-    //         let deleteRequest =  store.delete(deleteKeyRange);
-    //         deleteRequest.onsuccess = () => {
-    //           store.count().onsuccess = (e) => {console.log((e.target as any).result)};
-    //           console.log('deleting success', Date.now());
-    //           this.throwError(ErrorLevel.fatal, 'clean database success');
-    //         };
-    //         deleteRequest.onerror = (event) => {
-    //           this.currentRetryCount = this.maxRetryCount + 1;
-    //           this.throwError(ErrorLevel.fatal, 'clean database fail', (event.target as any).error);
-    //         };
-    //       }
-    //     };
-    //     request.onerror = (event) => {
-    //       this.currentRetryCount = this.maxRetryCount + 1;
-    //       this.throwError(ErrorLevel.fatal, 'clean database fail', (event.target as any).error);
-    //     };
-    //   }
-    // }
   }
 
   public keep(saveDays?: number): void {
@@ -266,44 +215,43 @@ export class MPIndexedDB {
     } else {
       // 删除过期数据
       const store = transaction.objectStore(this.DB_STORE_NAME);
-      let beginTime = Date.now();
       let beginRequest = store.openCursor();
       beginRequest.onsuccess = (event) => {
-        let first = (event.target as any).result.primaryKey;
-        let range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
-        let keyRange = IDBKeyRange.lowerBound(range);
-        if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
-          let keepRequest = store.index('timestamp').openKeyCursor(keyRange);
-          keepRequest.onsuccess = (event) => {
-            let end = (event.target as any).result.primaryKey;
-            let deleteRequest = store.delete(IDBKeyRange.bound(first, end, false, false));
-            deleteRequest.onsuccess = () => {
-              this.throwError(ErrorLevel.unused, 'keep logs success');
-              console.error('keep cost time', Date.now() - beginTime);
+        let result = (event.target as any).result;
+        if (result && result.primaryKey) {
+          let first = result.primaryKey;
+          let range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
+          let keyRange = IDBKeyRange.lowerBound(range);
+          if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
+            let keepRequest = store.index('timestamp').openKeyCursor(keyRange);
+            keepRequest.onsuccess = (event) => {
+              if (event.target && (event.target as any).result) {
+                let end = (event.target as any).result.primaryKey;
+                let deleteRequest = store.delete(IDBKeyRange.bound(first, end, false, false));
+                deleteRequest.onsuccess = () => {
+                  this.throwError(ErrorLevel.unused, 'keep logs success');
+                };
+                deleteRequest.onerror = (e) => {
+                  this.throwError(ErrorLevel.fatal, 'keep logs error', (e.target as any).error);
+                };
+              } else {
+                let countRequest = store.count();
+                countRequest.onsuccess = () => {
+                  let count = countRequest.result;
+                  let endCount = first + count;
+                  let deleteRequest = store.delete(IDBKeyRange.bound(first, endCount, false, false));
+                  deleteRequest.onsuccess = () => {
+                    this.throwError(ErrorLevel.unused, 'keep logs success');
+                  };
+                  deleteRequest.onerror = (e) => {
+                    this.throwError(ErrorLevel.fatal, 'keep logs error', (e.target as any).error);
+                  };
+                }
+              }
             };
-            deleteRequest.onerror = (e) => {
-              this.throwError(ErrorLevel.fatal, 'keep logs error', (e.target as any).error);
-            };
-          };
+          }
         }
       };
-      // let first = (event.target as any).result.primaryKey;
-      // const range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
-      // const keyRange = IDBKeyRange.upperBound(range);
-      // if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
-      //   const request = store.index('timestamp').getAllKeys(keyRange);
-      //   request.onsuccess = () => {
-      //     let resp = request.result;
-      //     if (resp && resp.length) {
-      //       let begin = resp[0];
-      //       let end = resp[resp.length-1];
-      //       let deleteKeyRange = IDBKeyRange.bound(begin, end, false, false);
-      //       store.delete(deleteKeyRange).onsuccess = () => {
-      //         this.throwError(ErrorLevel.unused, 'keep logs success');
-      //       };
-      //     }
-      //   };
-      // }
     }
   }
 
@@ -334,7 +282,7 @@ export class MPIndexedDB {
       return;
     }
 
-    if (this.dbStatus === DBStatus.FAILED && !this.timer) {
+    if (this.dbStatus === DBStatus.FAILED && !this.timer && errorLevel > 0) {
       this.timer = setInterval(() => {
         this.retryDBConnection();
       }, this.retryInterval);
@@ -415,6 +363,9 @@ export class MPIndexedDB {
       if (this.dbStatus !== DBStatus.INITING) { // 可能onupgradeneeded执行有问题
         return;
       }
+      if (this.timer) {
+        clearInterval(this.timer);
+      }
       this.db = (e.target as any).result;
       this.dbStatus = DBStatus.INITED;
       // 数据库错误
@@ -431,16 +382,16 @@ export class MPIndexedDB {
       } catch (e) {
         this.throwError(ErrorLevel.fatal, 'consume pool error', e);
       }
-      this.clean();
-      // if (!!this.keep7Days) {
-      //   setTimeout(() => { // 1秒后清理默认store的过期数据
-      //     if (this.dbStatus !== DBStatus.INITED) {
-      //       this.poolHandler.push(() => this.keep(7));
-      //     } else {
-      //       this.keep(7); // 保留3天数据
-      //     }
-      //   }, 1000);
-      // }
+      
+      if (!!this.keep7Days) {
+        setTimeout(() => { // 1秒后清理默认store的过期数据
+          if (this.dbStatus !== DBStatus.INITED) {
+            this.poolHandler.push(() => this.keep(7));
+          } else {
+            this.keep(7); // 保留3天数据
+          }
+        }, 1000);
+      }
     };
 
     request.onblocked = () => {
@@ -457,18 +408,6 @@ export class MPIndexedDB {
             const objectStore = this.db.createObjectStore(this.DB_STORE_NAME, {
               autoIncrement: true,
             });
-            objectStore.createIndex('location', 'location', {
-              unique: false,
-            });
-            objectStore.createIndex('level', 'level', {
-              unique: false,
-            });
-            objectStore.createIndex('description', 'description', {
-              unique: false,
-            });
-            objectStore.createIndex('data', 'data', {
-              unique: false,
-            });
             objectStore.createIndex('timestamp', 'timestamp', {
               unique: false,
             });
@@ -482,7 +421,7 @@ export class MPIndexedDB {
   }
 
   private async checkCurrentStorage() {
-    if (await getIfCurrentUsageExceed()) {
+    if (await getIfCurrentUsageExceed(STORAGE_MAX_SIZE)) {
       this.clean();
     }; 
   }

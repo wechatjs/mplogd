@@ -46,8 +46,8 @@ export class LogController {
     }
   }
 
-  public flush(items): any {
-    if (items.length === 0) {
+  public flush(items = this.bufferLog): any {
+    if (!items || items.length === 0) {
       return false;
     }
 
@@ -80,28 +80,14 @@ export class LogController {
   }
 
   private filterFunction(obj: any): any {
-    const newObj: any = {};
+    // 只记录string | number | boolean 类型
     try {
-      if (typeof obj === 'undefined') {
-        return '';
-      }
-      // 函数则转为字符串
-      if (typeof obj === 'function') {
-        return obj.toString();
-      }
-
-      if (typeof obj !== 'object') {
+      if (typeof obj === 'number' || typeof obj === 'boolean') {
+        return '' + obj;
+      } else if (typeof obj === 'string') {
         return obj;
       }
-
-      for (const i in obj) {
-        if (Object.prototype.hasOwnProperty.call(obj, i)) {
-          if (typeof obj[i] !== 'function') {
-            newObj[i] = this.filterFunction(obj[i]);
-          }
-        }
-      }
-      return newObj;
+      return '';
     } catch (e) {
       console.log(e);
     }

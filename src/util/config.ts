@@ -83,4 +83,4 @@ export const IgnoreCGIName = ['mplog', 'report', 'webcommreport'];
 
 export const MAX_LOG_SIZE = 100000000; // 100MB
 
-export const STORAGE_MAX_SIZE = 100000000; // 100MB
+export const STORAGE_MAX_SIZE = 50000000; // 50MB
