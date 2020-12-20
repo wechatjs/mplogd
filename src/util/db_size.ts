@@ -21,3 +21,22 @@ export async function getIfCurrentUsageExceed(maxLogSize = MAX_LOG_SIZE) {
     return false;
   }
 }
+
+export async function getCurrentUsage() {
+  try {
+    if (window.navigator && window.navigator.storage && (window.navigator as any).storage.estimate) {
+      return window.navigator.storage.estimate().then(({ usage }) => usage);
+    } else if (window.navigator && (window.navigator as any).webkitTemporaryStorage
+      && (window.navigator as any).webkitTemporaryStorage.queryUsageAndQuota) {
+      return new Promise((resolve) => {
+        (window.navigator as any).webkitTemporaryStorage
+        .queryUsageAndQuota((usedBytes) => {
+         resolve(usedBytes)
+        });
+      })
+    }
+    return 0;
+  } catch (e) {
+    return 0;
+  }
+}

@@ -28,6 +28,8 @@ export interface MplogConfig {
   BadJsReport?: Function | null;
   // 单条log的最大长度
   maxLogSize?: number;
+  // 实时上报函数
+  reportFunction?: Function | null;
 }
 
 export const DBStatus  = { //eslint-disable-line

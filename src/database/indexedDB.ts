@@ -5,7 +5,7 @@
 import { MplogConfig, DBStatus, ErrorLevel, STORAGE_MAX_SIZE } from '../util/config';
 import { PoolHandler } from '../controller/pool_handler';
 import { formatDate } from '../util/util';
-import { getIfCurrentUsageExceed,} from '../util/db_size';
+import { getIfCurrentUsageExceed, getCurrentUsage} from '../util/db_size';
 
 const TransactionType = {
   /**
@@ -76,6 +76,8 @@ export class MPIndexedDB {
 
   private keep7Days: boolean;
 
+  private isToLarge: boolean;
+
   constructor(config: MplogConfig, poolHandler: PoolHandler) {
     this.DB_NAME = config && config.dbName ? config.dbName : this.defaultDbName;
 
@@ -100,7 +102,9 @@ export class MPIndexedDB {
   }
 
   public async insertItems(bufferList: Array<any>) {
-    await this.checkCurrentStorage();
+    if (await this.checkCurrentStorage()) {
+      return;
+    }
     let request;
     const transaction = this.getTransaction(TransactionType.READ_WRITE);
     if (transaction === null) {
@@ -176,16 +180,24 @@ export class MPIndexedDB {
     try {
       this.dbStatus = DBStatus.FAILED;
       this.currentRetryCount = this.maxRetryCount + 1;
+      this.throwError(ErrorLevel.unused, 'begin clean database');
       // 删除1/3的数据
+      if (transaction === null) {
+        this.throwError(ErrorLevel.unused, 'begin clean transaction is none');
+      }
       const store = transaction.objectStore(this.DB_STORE_NAME);
-      let beginTime = Date.now();
+      if (!store) {
+        this.throwError(ErrorLevel.unused, 'begin clean store is none');
+      }
       let beginRequest = store.openCursor();
       beginRequest.onsuccess = (event) => {
         let result = (event.target as any).result;
         if (result && result.primaryKey) {
+          this.throwError(ErrorLevel.unused, 'begin clean get primary key');
           let first = result.primaryKey;
           let countRequest = store.count();
           countRequest.onsuccess = () => {
+            this.throwError(ErrorLevel.unused, 'begin clean get count');
             let count = countRequest.result;
             let endCount = first + Math.ceil(count / 3);
             let deleteRequest = store.delete(IDBKeyRange.bound(first, endCount, false, false));
@@ -195,9 +207,15 @@ export class MPIndexedDB {
             deleteRequest.onerror = (e) => {
               this.throwError(ErrorLevel.fatal, 'clean database error', (e.target as any).error);
             };
-          }
+          };
+          countRequest.onerror = (e) => {
+            this.throwError(ErrorLevel.fatal, 'clean database error count error', (e.target as any).error);
+          };
         }
-      }
+      };
+      beginRequest.onerror = (e) => {
+        this.throwError(ErrorLevel.fatal, 'clean database error open cursor error', (e.target as any).error);
+      };
     } catch(e) {
       this.throwError(ErrorLevel.unused, 'clean database error', e);
     }
@@ -301,8 +319,34 @@ export class MPIndexedDB {
     clearInterval(this.timer);
   }
 
-  private init(): void {
+  private async init() {
     try {
+      // 如果数据库超过100MB就什么都不做
+      if (await getIfCurrentUsageExceed()) {
+        this.isToLarge = true;
+        this.throwError(ErrorLevel.unused, 'this db size is too large');
+        let currentStorage = await getCurrentUsage();
+        if (currentStorage && currentStorage > 0) {
+          currentStorage = Math.ceil((currentStorage as number) / 1000000);
+          if (currentStorage > 100 && currentStorage <= 200) {
+            this.throwError(ErrorLevel.unused, '100MB - 200MB');
+          } else if (currentStorage > 200 && currentStorage <= 300) {
+            this.throwError(ErrorLevel.unused, '200MB - 300MB');
+          } else if (currentStorage > 300 && currentStorage <= 400) {
+            this.throwError(ErrorLevel.unused, '300MB - 400MB');
+          } else if (currentStorage > 400 && currentStorage <= 500) {
+            this.throwError(ErrorLevel.unused, '400MB - 500MB');
+          } else if (currentStorage > 500 && currentStorage <= 600) {
+            this.throwError(ErrorLevel.unused, '500MB - 600MB');
+          } else if (currentStorage > 600 && currentStorage <= 1000) {
+            this.throwError(ErrorLevel.unused, '600MB - 1000MB');
+          } else {
+            this.throwError(ErrorLevel.unused, 'larger than 1000MB');
+          }
+        }
+      } else {
+        this.throwError(ErrorLevel.unused, 'this db size is lower than 100MB');
+      }
       this.createDB();
     } catch (e) {
       console.log('Mplog createDB failed');
@@ -326,13 +370,6 @@ export class MPIndexedDB {
       this.throwError(ErrorLevel.unused, 'user support storage calculation');
     } else {
       this.throwError(ErrorLevel.unused, 'user does not support storage calculation');
-    }
-
-    // 如果数据库超过100MB就什么都不做
-    if (await getIfCurrentUsageExceed()) {
-      this.throwError(ErrorLevel.unused, 'the db size is too large');
-    } else {
-      this.throwError(ErrorLevel.unused, 'the db size is lower than 100MB');
     }
 
     const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
@@ -382,7 +419,10 @@ export class MPIndexedDB {
       } catch (e) {
         this.throwError(ErrorLevel.fatal, 'consume pool error', e);
       }
-      
+      if (this.isToLarge) {
+        this.clean();
+        return;
+      }
       if (!!this.keep7Days) {
         setTimeout(() => { // 1秒后清理默认store的过期数据
           if (this.dbStatus !== DBStatus.INITED) {
@@ -423,7 +463,9 @@ export class MPIndexedDB {
   private async checkCurrentStorage() {
     if (await getIfCurrentUsageExceed(STORAGE_MAX_SIZE)) {
       this.clean();
+      return true;
     }; 
+    return false;
   }
 
   private checkDB(event: any): void {

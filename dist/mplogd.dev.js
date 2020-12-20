@@ -52,6 +52,7 @@
   };
   var IgnoreCGIName = ['mplog', 'report', 'webcommreport'];
   var MAX_LOG_SIZE = 100000000; // 100MB
+  var STORAGE_MAX_SIZE = 50000000; // 50MB
 
   function formatNumber(n) {
       n = n.toString();
@@ -174,6 +175,34 @@
           });
       });
   }
+  function getCurrentUsage() {
+      return __awaiter(this, void 0, void 0, function () {
+          return __generator(this, function (_a) {
+              try {
+                  if (window.navigator && window.navigator.storage && window.navigator.storage.estimate) {
+                      return [2 /*return*/, window.navigator.storage.estimate().then(function (_a) {
+                              var usage = _a.usage;
+                              return usage;
+                          })];
+                  }
+                  else if (window.navigator && window.navigator.webkitTemporaryStorage
+                      && window.navigator.webkitTemporaryStorage.queryUsageAndQuota) {
+                      return [2 /*return*/, new Promise(function (resolve) {
+                              window.navigator.webkitTemporaryStorage
+                                  .queryUsageAndQuota(function (usedBytes) {
+                                  resolve(usedBytes);
+                              });
+                          })];
+                  }
+                  return [2 /*return*/, 0];
+              }
+              catch (e) {
+                  return [2 /*return*/, 0];
+              }
+              return [2 /*return*/];
+          });
+      });
+  }
 
   var TransactionType = {
       /**
@@ -233,7 +262,9 @@
                   switch (_a.label) {
                       case 0: return [4 /*yield*/, this.checkCurrentStorage()];
                       case 1:
-                          _a.sent();
+                          if (_a.sent()) {
+                              return [2 /*return*/];
+                          }
                           transaction = this.getTransaction(TransactionType.READ_WRITE);
                           if (transaction === null) {
                               this.throwError(ErrorLevel.fatal, 'transaction is null');
@@ -310,16 +341,24 @@
           try {
               this.dbStatus = DBStatus.FAILED;
               this.currentRetryCount = this.maxRetryCount + 1;
+              this.throwError(ErrorLevel.unused, 'begin clean database');
               // 删除1/3的数据
+              if (transaction === null) {
+                  this.throwError(ErrorLevel.unused, 'begin clean transaction is none');
+              }
               var store_1 = transaction.objectStore(this.DB_STORE_NAME);
-              var beginTime = Date.now();
+              if (!store_1) {
+                  this.throwError(ErrorLevel.unused, 'begin clean store is none');
+              }
               var beginRequest = store_1.openCursor();
               beginRequest.onsuccess = function (event) {
                   var result = event.target.result;
                   if (result && result.primaryKey) {
+                      _this.throwError(ErrorLevel.unused, 'begin clean get primary key');
                       var first_1 = result.primaryKey;
                       var countRequest_1 = store_1.count();
                       countRequest_1.onsuccess = function () {
+                          _this.throwError(ErrorLevel.unused, 'begin clean get count');
                           var count = countRequest_1.result;
                           var endCount = first_1 + Math.ceil(count / 3);
                           var deleteRequest = store_1["delete"](IDBKeyRange.bound(first_1, endCount, false, false));
@@ -330,7 +369,13 @@
                               _this.throwError(ErrorLevel.fatal, 'clean database error', e.target.error);
                           };
                       };
+                      countRequest_1.onerror = function (e) {
+                          _this.throwError(ErrorLevel.fatal, 'clean database error count error', e.target.error);
+                      };
                   }
+              };
+              beginRequest.onerror = function (e) {
+                  _this.throwError(ErrorLevel.fatal, 'clean database error open cursor error', e.target.error);
               };
           }
           catch (e) {
@@ -436,131 +481,170 @@
           clearInterval(this.timer);
       };
       MPIndexedDB.prototype.init = function () {
-          try {
-              this.createDB();
-          }
-          catch (e) {
-              console.log('Mplog createDB failed');
-          }
+          return __awaiter(this, void 0, void 0, function () {
+              var currentStorage, e_1;
+              return __generator(this, function (_a) {
+                  switch (_a.label) {
+                      case 0:
+                          _a.trys.push([0, 5, , 6]);
+                          return [4 /*yield*/, getIfCurrentUsageExceed()];
+                      case 1:
+                          if (!_a.sent()) return [3 /*break*/, 3];
+                          this.isToLarge = true;
+                          this.throwError(ErrorLevel.unused, 'this db size is too large');
+                          return [4 /*yield*/, getCurrentUsage()];
+                      case 2:
+                          currentStorage = _a.sent();
+                          if (currentStorage && currentStorage > 0) {
+                              currentStorage = Math.ceil(currentStorage / 1000000);
+                              if (currentStorage > 100 && currentStorage <= 200) {
+                                  this.throwError(ErrorLevel.unused, '100MB - 200MB');
+                              }
+                              else if (currentStorage > 200 && currentStorage <= 300) {
+                                  this.throwError(ErrorLevel.unused, '200MB - 300MB');
+                              }
+                              else if (currentStorage > 300 && currentStorage <= 400) {
+                                  this.throwError(ErrorLevel.unused, '300MB - 400MB');
+                              }
+                              else if (currentStorage > 400 && currentStorage <= 500) {
+                                  this.throwError(ErrorLevel.unused, '400MB - 500MB');
+                              }
+                              else if (currentStorage > 500 && currentStorage <= 600) {
+                                  this.throwError(ErrorLevel.unused, '500MB - 600MB');
+                              }
+                              else if (currentStorage > 600 && currentStorage <= 1000) {
+                                  this.throwError(ErrorLevel.unused, '600MB - 1000MB');
+                              }
+                              else {
+                                  this.throwError(ErrorLevel.unused, 'larger than 1000MB');
+                              }
+                          }
+                          return [3 /*break*/, 4];
+                      case 3:
+                          this.throwError(ErrorLevel.unused, 'this db size is lower than 100MB');
+                          _a.label = 4;
+                      case 4:
+                          this.createDB();
+                          return [3 /*break*/, 6];
+                      case 5:
+                          e_1 = _a.sent();
+                          console.log('Mplog createDB failed');
+                          return [3 /*break*/, 6];
+                      case 6: return [2 /*return*/];
+                  }
+              });
+          });
       };
       MPIndexedDB.prototype.createDB = function () {
           return __awaiter(this, void 0, void 0, function () {
               var request;
               var _this = this;
               return __generator(this, function (_a) {
-                  switch (_a.label) {
-                      case 0:
-                          if (!this.indexedDB) {
-                              this.currentRetryCount = this.maxRetryCount + 1;
-                              this.throwError(ErrorLevel.fatal, 'your browser not support IndexedDB.');
-                              return [2 /*return*/];
-                          }
-                          if (this.dbStatus !== DBStatus.INITING) {
-                              this.currentRetryCount = this.maxRetryCount + 1;
-                              this.throwError(ErrorLevel.fatal, 'indexedDB init error');
-                              return [2 /*return*/];
-                          }
-                          if ((window && window.navigator && window.navigator.storage) || (window && window.navigator && window.navigator.webkitTemporaryStorage)) {
-                              this.throwError(ErrorLevel.unused, 'user support storage calculation');
-                          }
-                          else {
-                              this.throwError(ErrorLevel.unused, 'user does not support storage calculation');
-                          }
-                          return [4 /*yield*/, getIfCurrentUsageExceed()];
-                      case 1:
-                          // 如果数据库超过100MB就什么都不做
-                          if (_a.sent()) {
-                              this.throwError(ErrorLevel.unused, 'the db size is too large');
-                          }
-                          else {
-                              this.throwError(ErrorLevel.unused, 'the db size is lower than 100MB');
-                          }
-                          request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
-                          request.onerror = function (e) {
-                              _this.checkDB(e);
-                              var errLvl = ErrorLevel.serious;
-                              if (e.target.error && e.target.error.name === 'VersionError') { // 打开低版本数据库导致失败
-                                  try {
-                                      var messgae = e.target.error.message;
-                                      var regexp = /The requested version \([0-9]+\) is less than the existing version \([0-9]\)/;
-                                      var isVersionLowError = messgae.search(regexp);
-                                      if (isVersionLowError > -1) {
-                                          var existVersion = messgae.match(/[0-9]+/ig)[1];
-                                          if (existVersion > _this.DB_VERSION) {
-                                              _this.DB_VERSION = existVersion;
-                                          }
-                                      }
-                                  }
-                                  catch (e) {
-                                      console.log(e);
-                                  }
-                                  errLvl = ErrorLevel.fatal; // 致命错误
-                                  _this.dbStatus = DBStatus.FAILED;
-                              }
-                              _this.throwError(errLvl, 'indexedDB open error', e.target.error);
-                          };
-                          request.onsuccess = function (e) {
-                              if (_this.dbStatus !== DBStatus.INITING) { // 可能onupgradeneeded执行有问题
-                                  return;
-                              }
-                              if (_this.timer) {
-                                  clearInterval(_this.timer);
-                              }
-                              _this.db = e.target.result;
-                              _this.dbStatus = DBStatus.INITED;
-                              // 数据库错误
-                              _this.db.onerror = function (er) { return _this.throwError(ErrorLevel.serious, 'indexedDB error', er.target.error); };
-                              // 其他MPlog对象打开了一个更新版本的数据库，或者数据库被删除时，此数据库链接要关闭
-                              _this.db.onversionchange = function (event) {
-                                  _this.db.close();
-                                  _this.dbStatus = DBStatus.FAILED;
-                                  _this.currentRetryCount = _this.maxRetryCount + 1; // 不需要重试了
-                                  _this.throwError(ErrorLevel.fatal, 'indexedDB version change', event.target.error);
-                              };
-                              try {
-                                  _this.poolHandler.consume();
-                              }
-                              catch (e) {
-                                  _this.throwError(ErrorLevel.fatal, 'consume pool error', e);
-                              }
-                              if (!!_this.keep7Days) {
-                                  setTimeout(function () {
-                                      if (_this.dbStatus !== DBStatus.INITED) {
-                                          _this.poolHandler.push(function () { return _this.keep(7); });
-                                      }
-                                      else {
-                                          _this.keep(7); // 保留3天数据
-                                      }
-                                  }, 1000);
-                              }
-                          };
-                          request.onblocked = function () {
-                              _this.throwError(ErrorLevel.serious, 'indexedDB is blocked');
-                          };
-                          request.onupgradeneeded = function (e) {
-                              _this.db = e.target.result;
-                              try {
-                                  if (typeof _this.onupgradeneeded === 'function') {
-                                      _this.onupgradeneeded(e);
-                                  }
-                                  else {
-                                      if (!_this.db.objectStoreNames.contains(_this.DB_STORE_NAME)) { // 没有store则创建
-                                          var objectStore = _this.db.createObjectStore(_this.DB_STORE_NAME, {
-                                              autoIncrement: true,
-                                          });
-                                          objectStore.createIndex('timestamp', 'timestamp', {
-                                              unique: false,
-                                          });
-                                      }
-                                  }
-                              }
-                              catch (event) {
-                                  _this.dbStatus = DBStatus.FAILED;
-                                  _this.throwError(ErrorLevel.fatal, 'indexedDB upgrade error', event);
-                              }
-                          };
-                          return [2 /*return*/];
+                  if (!this.indexedDB) {
+                      this.currentRetryCount = this.maxRetryCount + 1;
+                      this.throwError(ErrorLevel.fatal, 'your browser not support IndexedDB.');
+                      return [2 /*return*/];
                   }
+                  if (this.dbStatus !== DBStatus.INITING) {
+                      this.currentRetryCount = this.maxRetryCount + 1;
+                      this.throwError(ErrorLevel.fatal, 'indexedDB init error');
+                      return [2 /*return*/];
+                  }
+                  if ((window && window.navigator && window.navigator.storage) || (window && window.navigator && window.navigator.webkitTemporaryStorage)) {
+                      this.throwError(ErrorLevel.unused, 'user support storage calculation');
+                  }
+                  else {
+                      this.throwError(ErrorLevel.unused, 'user does not support storage calculation');
+                  }
+                  request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+                  request.onerror = function (e) {
+                      _this.checkDB(e);
+                      var errLvl = ErrorLevel.serious;
+                      if (e.target.error && e.target.error.name === 'VersionError') { // 打开低版本数据库导致失败
+                          try {
+                              var messgae = e.target.error.message;
+                              var regexp = /The requested version \([0-9]+\) is less than the existing version \([0-9]\)/;
+                              var isVersionLowError = messgae.search(regexp);
+                              if (isVersionLowError > -1) {
+                                  var existVersion = messgae.match(/[0-9]+/ig)[1];
+                                  if (existVersion > _this.DB_VERSION) {
+                                      _this.DB_VERSION = existVersion;
+                                  }
+                              }
+                          }
+                          catch (e) {
+                              console.log(e);
+                          }
+                          errLvl = ErrorLevel.fatal; // 致命错误
+                          _this.dbStatus = DBStatus.FAILED;
+                      }
+                      _this.throwError(errLvl, 'indexedDB open error', e.target.error);
+                  };
+                  request.onsuccess = function (e) {
+                      if (_this.dbStatus !== DBStatus.INITING) { // 可能onupgradeneeded执行有问题
+                          return;
+                      }
+                      if (_this.timer) {
+                          clearInterval(_this.timer);
+                      }
+                      _this.db = e.target.result;
+                      _this.dbStatus = DBStatus.INITED;
+                      // 数据库错误
+                      _this.db.onerror = function (er) { return _this.throwError(ErrorLevel.serious, 'indexedDB error', er.target.error); };
+                      // 其他MPlog对象打开了一个更新版本的数据库，或者数据库被删除时，此数据库链接要关闭
+                      _this.db.onversionchange = function (event) {
+                          _this.db.close();
+                          _this.dbStatus = DBStatus.FAILED;
+                          _this.currentRetryCount = _this.maxRetryCount + 1; // 不需要重试了
+                          _this.throwError(ErrorLevel.fatal, 'indexedDB version change', event.target.error);
+                      };
+                      try {
+                          _this.poolHandler.consume();
+                      }
+                      catch (e) {
+                          _this.throwError(ErrorLevel.fatal, 'consume pool error', e);
+                      }
+                      if (_this.isToLarge) {
+                          _this.clean();
+                          return;
+                      }
+                      if (!!_this.keep7Days) {
+                          setTimeout(function () {
+                              if (_this.dbStatus !== DBStatus.INITED) {
+                                  _this.poolHandler.push(function () { return _this.keep(7); });
+                              }
+                              else {
+                                  _this.keep(7); // 保留3天数据
+                              }
+                          }, 1000);
+                      }
+                  };
+                  request.onblocked = function () {
+                      _this.throwError(ErrorLevel.serious, 'indexedDB is blocked');
+                  };
+                  request.onupgradeneeded = function (e) {
+                      _this.db = e.target.result;
+                      try {
+                          if (typeof _this.onupgradeneeded === 'function') {
+                              _this.onupgradeneeded(e);
+                          }
+                          else {
+                              if (!_this.db.objectStoreNames.contains(_this.DB_STORE_NAME)) { // 没有store则创建
+                                  var objectStore = _this.db.createObjectStore(_this.DB_STORE_NAME, {
+                                      autoIncrement: true,
+                                  });
+                                  objectStore.createIndex('timestamp', 'timestamp', {
+                                      unique: false,
+                                  });
+                              }
+                          }
+                      }
+                      catch (event) {
+                          _this.dbStatus = DBStatus.FAILED;
+                          _this.throwError(ErrorLevel.fatal, 'indexedDB upgrade error', event);
+                      }
+                  };
+                  return [2 /*return*/];
               });
           });
       };
@@ -568,12 +652,13 @@
           return __awaiter(this, void 0, void 0, function () {
               return __generator(this, function (_a) {
                   switch (_a.label) {
-                      case 0: return [4 /*yield*/, getIfCurrentUsageExceed()];
+                      case 0: return [4 /*yield*/, getIfCurrentUsageExceed(STORAGE_MAX_SIZE)];
                       case 1:
                           if (_a.sent()) {
                               this.clean();
+                              return [2 /*return*/, true];
                           }
-                          return [2 /*return*/];
+                          return [2 /*return*/, false];
                   }
               });
           });
@@ -647,6 +732,7 @@
           // 缓存记录的大小
           this.bufferSize = config && typeof config.bufferSize !== 'undefined' ? config.bufferSize * 1 : 10;
           this.maxLogSize = config && config.maxLogSize ? config.maxLogSize : 3000;
+          this.reportFunction = config && config.reportFunction;
           this.poolHandler = new PoolHandler();
           this.mpIndexedDB = new MPIndexedDB(config, this.poolHandler);
       }
@@ -671,6 +757,9 @@
           if (items === void 0) { items = this.bufferLog; }
           if (!items || items.length === 0) {
               return false;
+          }
+          if (this.reportFunction) {
+              this.reportFunction(items);
           }
           if (this.mpIndexedDB.dbStatus !== DBStatus.INITED) {
               return this.poolHandler.push(function () { return _this.flush(items); });

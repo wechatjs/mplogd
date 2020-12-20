@@ -18,11 +18,15 @@ export class LogController {
 
   private maxLogSize: number;
 
+  private reportFunction: Function;
+
   constructor(config: MplogConfig) {
     // 缓存记录的大小
     this.bufferSize = config && typeof config.bufferSize !== 'undefined' ? config.bufferSize * 1 : 10;
 
     this.maxLogSize = config && config.maxLogSize ? config.maxLogSize : 3000;
+
+    this.reportFunction = config && config.reportFunction;
 
     this.poolHandler = new PoolHandler();
 
@@ -49,6 +53,10 @@ export class LogController {
   public flush(items = this.bufferLog): any {
     if (!items || items.length === 0) {
       return false;
+    }
+
+    if (this.reportFunction) {
+      this.reportFunction(items);
     }
 
     if (this.mpIndexedDB.dbStatus !== DBStatus.INITED) {
