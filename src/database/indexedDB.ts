@@ -191,7 +191,14 @@ export class MPIndexedDB {
       }
       let beginRequest = store.openCursor();
       beginRequest.onsuccess = (event) => {
+        this.throwError(ErrorLevel.unused, 'begin clean cursor opened');
         let result = (event.target as any).result;
+        if (!result) {
+          this.throwError(ErrorLevel.unused, 'begin clean cursor error no result');
+        }
+        if (result && !result.primaryKey) {
+          this.throwError(ErrorLevel.unused, 'begin clean cursor error no primarykey', result.key);
+        }
         if (result && result.primaryKey) {
           this.throwError(ErrorLevel.unused, 'begin clean get primary key');
           let first = result.primaryKey;

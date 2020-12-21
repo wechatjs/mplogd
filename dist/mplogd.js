@@ -352,7 +352,14 @@
               }
               var beginRequest = store_1.openCursor();
               beginRequest.onsuccess = function (event) {
+                  _this.throwError(ErrorLevel.unused, 'begin clean cursor opened');
                   var result = event.target.result;
+                  if (!result) {
+                      _this.throwError(ErrorLevel.unused, 'begin clean cursor error no result');
+                  }
+                  if (result && !result.primaryKey) {
+                      _this.throwError(ErrorLevel.unused, 'begin clean cursor error no primarykey', result.key);
+                  }
                   if (result && result.primaryKey) {
                       _this.throwError(ErrorLevel.unused, 'begin clean get primary key');
                       var first_1 = result.primaryKey;
