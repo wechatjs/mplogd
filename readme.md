@@ -1,23 +1,25 @@
-##背景
+## 背景
 前端定位问题困难，很多时候定位问题只能靠猜，无法了解用户真实操作场景。已有的错误上报系统，只能知道页面的js错误，无法满足需求，因此开发该项目。
 
 因为日志的存储量比较大，并且许多日志是无效日志，对于服务器而言一次性存储的量有限制，只有发生问题用户的日志才是定位问题的需求，选择将日志存储在用户本地。
 
 在实际接入微信公众平台公众号业务后，通过上报监控来看，小程序提供的后台实时日志接口远远能够满足公众号日志上报的量。因此提供配置，对于关键信息，可以开启实时日志配置，自定义实时日志上报接口，进行上报。
 
-##存储介质选择
-####localstorage
+Mplogd优势：支持配置自动记录ajax、js error、promise reject，配置监控告警，自定义控制实时上报，下载日志文件至本地，提供灵活获取日志方式。
+
+## 存储介质选择
+#### localstorage
 只支持字符串，有大小和个数限制。
-####cookie
+#### cookie
 只支持字符串，隐私模式不可用。
-####websql
+#### websql
 已被废弃。
-####indexedDB
+#### indexedDB
 支持存储对象，大容量，兼容性好。最终选择用indexedDB作为存储介质。
 
-##Mplogd使用
-###如何记录日志
-####1.快速上手
+## Mplogd使用
+### 如何记录日志
+#### 1.快速上手
 记录日志简单易上手，只需要引入mplogd的npm包，实例化mplogd对象，根据需求调用相应的info\warn\error接口即可。
 
 日志记录在用户浏览器端的indexedDB中，默认数据库名mplog，数据库表名logs。
@@ -39,7 +41,7 @@ mplog.warn('invalid input', 'xxx');
 4. data 数据
 5. timestamp 时间戳
 
-####2.个性化配置
+#### 2.个性化配置
 - 基本配置比如数据库名、数据库表名、数据库版本等。
 - 配置自动记录页面ajax请求、js错误、promise错误，同时支持ajaxFilter过滤不需要记录的ajax请求。
 - 配置错误监控上报函数、实时日志上报函数
@@ -61,7 +63,7 @@ maxLogSize | 单条日志最大长度 |  3000
 BadJsReport | 错误监控上报 | null
 reportFunction | 实时日志上报 | null
 
-#####使用方式
+##### 使用方式
 ```
 // 多维监控上报
 let BadJsReport = (errorMsg, errorInfo) => {
@@ -85,12 +87,13 @@ const mplog = new Mplogd({
 });
 ```
 
-###如何获取用户日志
+### 如何获取用户日志
 当用户反馈问题时，日志只是记录在了用户的浏览器中，要如何或者他们的日志呢。
 
-####方式1：主动上传
-#####1. 获取日志
-1.1 默认获取日志格式
+#### 方式1：主动上传
+
+##### 1. 获取日志
+###### 1.1 默认获取日志格式
 ```
 const mplog = new Mplogd({
 	dbName: 'mplog', // 传入需要上传的数据库名
@@ -103,7 +106,7 @@ let dealFunc = (logs) => {
 };
 mplog.get(beginTime, endTime, dealFunc);
 ```
-1.2 自定义获取日志格式
+###### 1.2 自定义获取日志格式
 ```
 const mplog = new Mplogd({
 	dbName: 'mplog', // 传入需要上传的数据库名
@@ -126,7 +129,7 @@ let dealFunc = (event) => {
 mplog.get(beginTime, endTime, null, dealFunc);
 ```
 
-1.3 下载日志至用户本地
+###### 1.3 下载日志至用户本地
 ```
 const mplog = new Mplogd({
 	dbName: 'mplog', // 传入需要上传的数据库名
@@ -137,7 +140,7 @@ let endTime = Date.now();
 mplog.download(beginTime, endTime);
 ```
 
-####方式2：自动下发上传
+#### 方式2：自动上传
 需要业务方根据自身业务自己实现，这里提供公众号的实现方式。
 
 1. 提供配置网址，对特定的公众号bizuin、页面、时间段的配置日志上传。
