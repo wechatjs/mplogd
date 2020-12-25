@@ -91,8 +91,9 @@ const mplog = new Mplogd({
 当用户反馈问题时，日志只是记录在了用户的浏览器中，要如何或者他们的日志呢。
 
 #### 方式1：主动上传
+
 ##### 1. 获取日志
-1.1 默认获取日志格式
+###### 1.1 默认获取日志格式
 ```
 const mplog = new Mplogd({
 	dbName: 'mplog', // 传入需要上传的数据库名
@@ -105,7 +106,7 @@ let dealFunc = (logs) => {
 };
 mplog.get(beginTime, endTime, dealFunc);
 ```
-1.2 自定义获取日志格式
+###### 1.2 自定义获取日志格式
 ```
 const mplog = new Mplogd({
 	dbName: 'mplog', // 传入需要上传的数据库名
@@ -128,7 +129,7 @@ let dealFunc = (event) => {
 mplog.get(beginTime, endTime, null, dealFunc);
 ```
 
-1.3 下载日志至用户本地
+###### 1.3 下载日志至用户本地
 ```
 const mplog = new Mplogd({
 	dbName: 'mplog', // 传入需要上传的数据库名
