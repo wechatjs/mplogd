@@ -20,7 +20,7 @@ Mplogd优势：支持配置自动记录ajax、js error、promise reject，支持
 ## Mplogd使用
 ### 如何记录日志
 #### 1.快速上手
-记录日志简单易上手，只需要引入mplogd的npm包，实例化mplogd对象，根据需求调用相应的info\warn\error接口即可。
+记录日志简单易上手，只需要引入mplogd的npm包 version: 1.1.0，实例化mplogd对象，根据需求调用相应的info\warn\error接口即可。
 
 日志记录在用户浏览器端的indexedDB中，默认数据库名mplog，数据库表名logs。
 
