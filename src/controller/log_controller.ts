@@ -2,7 +2,7 @@
  * @author dididong
  * @description 实际进行日志操作
  */
-import { MplogConfig, DB_Status } from '../util/config';
+import { MplogConfig, DBStatus } from '../util/config';
 import * as Util  from '../util/util';
 import { MPIndexedDB } from '../database/indexedDB';
 import { PoolHandler } from '../controller/pool_handler';
@@ -18,11 +18,15 @@ export class LogController {
 
   private maxLogSize: number;
 
+  private reportFunction: Function;
+
   constructor(config: MplogConfig) {
     // 缓存记录的大小
     this.bufferSize = config && typeof config.bufferSize !== 'undefined' ? config.bufferSize * 1 : 10;
 
     this.maxLogSize = config && config.maxLogSize ? config.maxLogSize : 3000;
+
+    this.reportFunction = config && config.reportFunction;
 
     this.poolHandler = new PoolHandler();
 
@@ -41,32 +45,36 @@ export class LogController {
     };
     this.bufferLog.push(value);
     if (this.bufferLog.length >= this.bufferSize) {
-      this.flush();
+      this.flush(this.bufferLog);
+      this.bufferLog = [];
     }
   }
 
-  public flush(): any {
-    if (this.bufferLog.length === 0) {
+  public flush(items = this.bufferLog): any {
+    if (!items || items.length === 0) {
       return false;
     }
 
-    if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
-      return this.poolHandler.push(() => this.flush());
+    if (this.reportFunction) {
+      this.reportFunction(items);
     }
-    this.mpIndexedDB.insertItems(this.bufferLog);
-    this.bufferLog = [];
+
+    if (this.mpIndexedDB.dbStatus !== DBStatus.INITED) {
+      return this.poolHandler.push(() => this.flush(items));
+    }
+    this.mpIndexedDB.insertItems(items);
     return 0;
   }
 
   public get(from: Date, to: Date, dealFun?: Function, successCb?: Function): any {
-    if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
+    if (this.mpIndexedDB.dbStatus !== DBStatus.INITED) {
       return this.poolHandler.push(() => this.get(from, to, dealFun, successCb));
     }
     this.mpIndexedDB.get(from, to, dealFun, successCb);
   }
 
   public keep(saveDays: number): void {
-    if (this.mpIndexedDB.dbStatus !== DB_Status.INITED) {
+    if (this.mpIndexedDB.dbStatus !== DBStatus.INITED) {
       return this.poolHandler.push(() => this.keep(saveDays));
     }
     this.mpIndexedDB.keep(saveDays);
@@ -80,28 +88,14 @@ export class LogController {
   }
 
   private filterFunction(obj: any): any {
-    const newObj: any = {};
+    // 只记录string | number | boolean 类型
     try {
-      if (typeof obj === 'undefined') {
-        return '';
-      }
-      // 函数则转为字符串
-      if (typeof obj === 'function') {
-        return obj.toString();
-      }
-
-      if (typeof obj !== 'object') {
+      if (typeof obj === 'number' || typeof obj === 'boolean') {
+        return '' + obj;
+      } else if (typeof obj === 'string') {
         return obj;
       }
-
-      for (const i in obj) {
-        if (Object.prototype.hasOwnProperty.call(obj, i)) {
-          if (typeof obj[i] !== 'function') {
-            newObj[i] = this.filterFunction(obj[i]);
-          }
-        }
-      }
-      return newObj;
+      return '';
     } catch (e) {
       console.log(e);
     }

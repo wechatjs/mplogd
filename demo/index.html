@@ -32,8 +32,8 @@
 </head>
 
 <body>
-  <script src="../dist/index.js"></script> 
-  <h2>lajax demo</h2>
+  <script src="../dist/mplogd.js"></script> 
+  <h2>mplog demo</h2>
   <h4>请按 F12 打开控制台查看输出</h4>
   <button id="btn1">手动：点我记一条info日志</button>
   <button id="btn2">手动：点我记一条warn日志</button>
@@ -48,6 +48,12 @@
   <button id="btn11">清除日志</button>
   <script>
     var logger = new Mplogd();
+    // setInterval(function () {
+    // for (let i = 0; i < 100000; i++) {
+    //     console.log(i);
+    //     logger.info('这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志');
+    // }
+    // }, 100000);
     document.querySelector('#btn1').addEventListener('click', function () {
         var num = parseInt(Math.random() * 100);
         logger.info('这是一条info日志', '会产生一个随机数：', num);
