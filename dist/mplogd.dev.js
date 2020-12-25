@@ -356,6 +356,10 @@
                   var result = event.target.result;
                   if (!result) {
                       _this.throwError(ErrorLevel.unused, 'begin clean cursor error no result');
+                      var errorCount_1 = store_1.count();
+                      errorCount_1.onsuccess = function () {
+                          _this.throwError(ErrorLevel.unused, "begin clean no result" + errorCount_1.result);
+                      };
                   }
                   if (result && !result.primaryKey) {
                       _this.throwError(ErrorLevel.unused, 'begin clean cursor error no primarykey', result.key);

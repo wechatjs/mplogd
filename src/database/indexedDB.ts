@@ -195,6 +195,10 @@ export class MPIndexedDB {
         let result = (event.target as any).result;
         if (!result) {
           this.throwError(ErrorLevel.unused, 'begin clean cursor error no result');
+          let errorCount = store.count();
+          errorCount.onsuccess = () => {
+            this.throwError(ErrorLevel.unused, `begin clean no result${errorCount.result}`);
+          };
         }
         if (result && !result.primaryKey) {
           this.throwError(ErrorLevel.unused, 'begin clean cursor error no primarykey', result.key);
