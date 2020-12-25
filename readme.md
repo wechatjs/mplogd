@@ -140,7 +140,7 @@ let endTime = Date.now();
 mplog.download(beginTime, endTime);
 ```
 
-#### 方式2：自动下发上传
+#### 方式2：自动上传
 需要业务方根据自身业务自己实现，这里提供公众号的实现方式。
 
 1. 提供配置网址，对特定的公众号bizuin、页面、时间段的配置日志上传。
