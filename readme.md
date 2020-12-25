@@ -53,7 +53,7 @@ mplog.warn('invalid input', 'xxx');
 dbName         |  数据库名            | mplog
 dbStoreName    | 数据库表名           | logs
 dbVersion      | 数据库版本           | 1 
-bufferSize     | 写日志缓存的记录大小，可设置我1即时记录 | 10
+bufferSize     | 写日志缓存的记录大小，可设置为1即时记录 | 10
 autoLogError     |是否自动记录错误信息     |   false  
 autoLogRejection  |是否自动记录promise错误 |   false
 autoLogAjax       | 是否自动记录AJAX请求   |   false
