@@ -436,13 +436,15 @@
                   if (result && result.primaryKey) {
                       var first_2 = result.primaryKey;
                       var range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
-                      var keyRange = IDBKeyRange.lowerBound(range);
+                      var keyRange = IDBKeyRange.lowerBound(range, true);
                       if (store_2.indexNames && store_2.indexNames.length && store_2.indexNames.contains('timestamp')) {
                           var keepRequest = store_2.index('timestamp').openKeyCursor(keyRange);
                           keepRequest.onsuccess = function (event) {
                               if (event.target && event.target.result) {
                                   var end = event.target.result.primaryKey;
-                                  var deleteRequest = store_2["delete"](IDBKeyRange.bound(first_2, end, false, false));
+                                  if (first_2 === end)
+                                      return;
+                                  var deleteRequest = store_2["delete"](IDBKeyRange.bound(first_2, end, false, true));
                                   deleteRequest.onsuccess = function () {
                                       _this.throwError(ErrorLevel.unused, 'keep logs success');
                                   };

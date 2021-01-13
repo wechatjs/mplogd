@@ -205,6 +205,8 @@ export class MPIndexedDB {
           errorCount.onsuccess = async () => {
             this.throwError(ErrorLevel.unused, `begin clean no result${errorCount.result}`);
             if (await getCurrentUsage() < 400000000) {
+              this.dbStatus = DBStatus.FAILED;
+              this.currentRetryCount = this.maxRetryCount + 1;
               this.indexedDB.deleteDatabase(this.DB_NAME);
               this.throwError(ErrorLevel.unused, `delete count0 database`);
             }
