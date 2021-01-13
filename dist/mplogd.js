@@ -260,9 +260,11 @@
               var _this = this;
               return __generator(this, function (_a) {
                   switch (_a.label) {
-                      case 0: return [4 /*yield*/, this.checkCurrentStorage()];
+                      case 0: return [4 /*yield*/, getCurrentUsage()];
                       case 1:
-                          if (_a.sent()) {
+                          if ((_a.sent()) > 2000) {
+                              this.throwError(ErrorLevel.unused, 'larger than 2000MB');
+                              this.clean();
                               return [2 /*return*/];
                           }
                           transaction = this.getTransaction(TransactionType.READ_WRITE);
@@ -280,6 +282,7 @@
                                   return _this.throwError(ErrorLevel.normal, 'add log failed', e.target.error);
                               };
                           }
+                          this.checkCurrentStorage();
                           return [2 /*return*/];
                   }
               });
@@ -331,67 +334,86 @@
           return true;
       };
       MPIndexedDB.prototype.clean = function () {
-          var _this = this;
-          // indexeddb中当遇到容量大时不能直接deleteDatabase 或者clearStore涉及到
-          var transaction = this.getTransaction(TransactionType.READ_WRITE);
-          if (transaction === null) {
-              this.throwError(ErrorLevel.fatal, 'transaction is null');
-              return;
-          }
-          try {
-              this.dbStatus = DBStatus.FAILED;
-              this.currentRetryCount = this.maxRetryCount + 1;
-              this.throwError(ErrorLevel.unused, 'begin clean database');
-              // 删除1/3的数据
-              if (transaction === null) {
-                  this.throwError(ErrorLevel.unused, 'begin clean transaction is none');
-              }
-              var store_1 = transaction.objectStore(this.DB_STORE_NAME);
-              if (!store_1) {
-                  this.throwError(ErrorLevel.unused, 'begin clean store is none');
-              }
-              var beginRequest = store_1.openCursor();
-              beginRequest.onsuccess = function (event) {
-                  _this.throwError(ErrorLevel.unused, 'begin clean cursor opened');
-                  var result = event.target.result;
-                  if (!result) {
-                      _this.throwError(ErrorLevel.unused, 'begin clean cursor error no result');
-                      var errorCount_1 = store_1.count();
-                      errorCount_1.onsuccess = function () {
-                          _this.throwError(ErrorLevel.unused, "begin clean no result" + errorCount_1.result);
+          return __awaiter(this, void 0, void 0, function () {
+              var transaction, store_1, beginRequest;
+              var _this = this;
+              return __generator(this, function (_a) {
+                  if (this.cleaning) {
+                      return [2 /*return*/];
+                  }
+                  transaction = this.getTransaction(TransactionType.READ_WRITE);
+                  if (transaction === null) {
+                      this.throwError(ErrorLevel.fatal, 'transaction is null');
+                      return [2 /*return*/];
+                  }
+                  try {
+                      this.throwError(ErrorLevel.unused, 'begin clean database');
+                      // 删除1/3的数据
+                      if (transaction === null) {
+                          this.throwError(ErrorLevel.unused, 'begin clean transaction is none');
+                      }
+                      store_1 = transaction.objectStore(this.DB_STORE_NAME);
+                      if (!store_1) {
+                          this.throwError(ErrorLevel.unused, 'begin clean store is none');
+                      }
+                      beginRequest = store_1.openCursor();
+                      beginRequest.onsuccess = function (event) {
+                          _this.throwError(ErrorLevel.unused, 'begin clean cursor opened');
+                          var result = event.target.result;
+                          if (!result) {
+                              _this.throwError(ErrorLevel.unused, 'begin clean cursor error no result');
+                              var errorCount_1 = store_1.count();
+                              errorCount_1.onsuccess = function () { return __awaiter(_this, void 0, void 0, function () {
+                                  return __generator(this, function (_a) {
+                                      switch (_a.label) {
+                                          case 0:
+                                              this.throwError(ErrorLevel.unused, "begin clean no result" + errorCount_1.result);
+                                              return [4 /*yield*/, getCurrentUsage()];
+                                          case 1:
+                                              if ((_a.sent()) < 400) {
+                                                  this.indexedDB.deleteDatabase(this.DB_NAME);
+                                              }
+                                              return [2 /*return*/];
+                                      }
+                                  });
+                              }); };
+                          }
+                          if (result && !result.primaryKey) {
+                              _this.throwError(ErrorLevel.unused, 'begin clean cursor error no primarykey', result.key);
+                          }
+                          if (result && result.primaryKey) {
+                              _this.cleaning = true;
+                              _this.throwError(ErrorLevel.unused, 'begin clean get primary key');
+                              var first_1 = result.primaryKey;
+                              var countRequest_1 = store_1.count();
+                              countRequest_1.onsuccess = function () {
+                                  _this.throwError(ErrorLevel.unused, 'begin clean get count');
+                                  var count = countRequest_1.result;
+                                  var endCount = first_1 + Math.ceil(count / 5);
+                                  var deleteRequest = store_1["delete"](IDBKeyRange.bound(first_1, endCount, false, false));
+                                  deleteRequest.onsuccess = function () {
+                                      _this.throwError(ErrorLevel.unused, 'clean database success');
+                                      _this.cleaning = false;
+                                  };
+                                  deleteRequest.onerror = function (e) {
+                                      _this.throwError(ErrorLevel.fatal, 'clean database error', e.target.error);
+                                  };
+                              };
+                              countRequest_1.onerror = function (e) {
+                                  _this.throwError(ErrorLevel.fatal, 'clean database error count error', e.target.error);
+                              };
+                          }
+                      };
+                      beginRequest.onerror = function (e) {
+                          _this.throwError(ErrorLevel.fatal, 'clean database error open cursor error', e.target.error);
                       };
                   }
-                  if (result && !result.primaryKey) {
-                      _this.throwError(ErrorLevel.unused, 'begin clean cursor error no primarykey', result.key);
+                  catch (e) {
+                      this.throwError(ErrorLevel.unused, 'clean database error', e);
                   }
-                  if (result && result.primaryKey) {
-                      _this.throwError(ErrorLevel.unused, 'begin clean get primary key');
-                      var first_1 = result.primaryKey;
-                      var countRequest_1 = store_1.count();
-                      countRequest_1.onsuccess = function () {
-                          _this.throwError(ErrorLevel.unused, 'begin clean get count');
-                          var count = countRequest_1.result;
-                          var endCount = first_1 + Math.ceil(count / 3);
-                          var deleteRequest = store_1["delete"](IDBKeyRange.bound(first_1, endCount, false, false));
-                          deleteRequest.onsuccess = function () {
-                              _this.throwError(ErrorLevel.unused, 'clean database success');
-                          };
-                          deleteRequest.onerror = function (e) {
-                              _this.throwError(ErrorLevel.fatal, 'clean database error', e.target.error);
-                          };
-                      };
-                      countRequest_1.onerror = function (e) {
-                          _this.throwError(ErrorLevel.fatal, 'clean database error count error', e.target.error);
-                      };
-                  }
-              };
-              beginRequest.onerror = function (e) {
-                  _this.throwError(ErrorLevel.fatal, 'clean database error open cursor error', e.target.error);
-              };
-          }
-          catch (e) {
-              this.throwError(ErrorLevel.unused, 'clean database error', e);
-          }
+                  return [2 /*return*/];
+              });
+          });
       };
       MPIndexedDB.prototype.keep = function (saveDays) {
           var _this = this;
@@ -501,7 +523,7 @@
                           return [4 /*yield*/, getIfCurrentUsageExceed()];
                       case 1:
                           if (!_a.sent()) return [3 /*break*/, 3];
-                          this.isToLarge = true;
+                          // this.isToLarge = true;
                           this.throwError(ErrorLevel.unused, 'this db size is too large');
                           return [4 /*yield*/, getCurrentUsage()];
                       case 2:
@@ -615,10 +637,10 @@
                       catch (e) {
                           _this.throwError(ErrorLevel.fatal, 'consume pool error', e);
                       }
-                      if (_this.isToLarge) {
-                          _this.clean();
-                          return;
-                      }
+                      // if (this.isToLarge) {
+                      //   this.clean();
+                      //   return;
+                      // }
                       if (!!_this.keep7Days) {
                           setTimeout(function () {
                               if (_this.dbStatus !== DBStatus.INITED) {
