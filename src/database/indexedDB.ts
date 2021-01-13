@@ -308,7 +308,7 @@ export class MPIndexedDB {
       errorMsg = `${errorMsg}:${error.message || error.stack || error.name}`;
       errorStr = error.toString();
     }
-    console.error && console.error(`Mplog: error msg: ${errorMsg}, error detail: ${errorStr}`);
+    // console.error && console.error(`Mplog: error msg: ${errorMsg}, error detail: ${errorStr}`);
     // 可以对内部的错误类型上报
     try {
       if (this.BadJsReport) {

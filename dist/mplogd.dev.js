@@ -814,6 +814,12 @@
           }
           this.mpIndexedDB.keep(saveDays);
       };
+      LogController.prototype.clean = function () {
+          if (this.mpIndexedDB.dbStatus !== DBStatus.INITED) {
+              return this.poolHandler.push(function () { return this.clean(); });
+          }
+          this.mpIndexedDB.clean();
+      };
       LogController.prototype.dealLength = function (logValue) {
           if (typeof this.maxLogSize === 'number' && typeof logValue === 'string' && logValue.length >= this.maxLogSize) {
               logValue = logValue.substr(0, this.maxLogSize);
@@ -881,6 +887,9 @@
       };
       Mplogd.prototype.keep = function (saveDays) {
           this.logController.keep(saveDays);
+      };
+      Mplogd.prototype.clean = function () {
+          this.logController.clean(); // 还是1/3 删除，防止过大
       };
       Mplogd.prototype.bindEvent = function () {
           var _this = this;
