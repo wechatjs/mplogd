@@ -76,7 +76,9 @@ export class MPIndexedDB {
 
   private keep7Days: boolean;
 
-  private isToLarge: boolean;
+  // private isToLarge: boolean;
+
+  private cleaning: boolean;
 
   constructor(config: MplogConfig, poolHandler: PoolHandler) {
     this.DB_NAME = config && config.dbName ? config.dbName : this.defaultDbName;
@@ -102,7 +104,9 @@ export class MPIndexedDB {
   }
 
   public async insertItems(bufferList: Array<any>) {
-    if (await this.checkCurrentStorage()) {
+    if (await getCurrentUsage() > 2000000000) {
+      this.throwError(ErrorLevel.unused, 'larger than 2000MB');
+      this.clean();
       return;
     }
     let request;
@@ -122,6 +126,7 @@ export class MPIndexedDB {
         return this.throwError(ErrorLevel.normal, 'add log failed', (e.target as any).error);
       };
     }
+    this.checkCurrentStorage();
   }
 
   public get(from: Date, to: Date, dealFc?: Function, successCb?: Function): any {
@@ -170,7 +175,10 @@ export class MPIndexedDB {
     return true;
   }
 
-  public clean(): void {
+  public async clean() {
+    if (this.cleaning) {
+      return;
+    }
     // indexeddb中当遇到容量大时不能直接deleteDatabase 或者clearStore涉及到
     const transaction = this.getTransaction(TransactionType.READ_WRITE);
     if (transaction === null) {
@@ -178,8 +186,6 @@ export class MPIndexedDB {
       return;
     }
     try {
-      this.dbStatus = DBStatus.FAILED;
-      this.currentRetryCount = this.maxRetryCount + 1;
       this.throwError(ErrorLevel.unused, 'begin clean database');
       // 删除1/3的数据
       if (transaction === null) {
@@ -196,24 +202,32 @@ export class MPIndexedDB {
         if (!result) {
           this.throwError(ErrorLevel.unused, 'begin clean cursor error no result');
           let errorCount = store.count();
-          errorCount.onsuccess = () => {
+          errorCount.onsuccess = async () => {
             this.throwError(ErrorLevel.unused, `begin clean no result${errorCount.result}`);
+            if (await getCurrentUsage() < 400000000) {
+              this.dbStatus = DBStatus.FAILED;
+              this.currentRetryCount = this.maxRetryCount + 1;
+              this.indexedDB.deleteDatabase(this.DB_NAME);
+              this.throwError(ErrorLevel.unused, `delete count0 database`);
+            }
           };
         }
         if (result && !result.primaryKey) {
           this.throwError(ErrorLevel.unused, 'begin clean cursor error no primarykey', result.key);
         }
         if (result && result.primaryKey) {
+          this.cleaning = true;
           this.throwError(ErrorLevel.unused, 'begin clean get primary key');
           let first = result.primaryKey;
           let countRequest = store.count();
           countRequest.onsuccess = () => {
             this.throwError(ErrorLevel.unused, 'begin clean get count');
             let count = countRequest.result;
-            let endCount = first + Math.ceil(count / 3);
+            let endCount = first + Math.ceil(count / 5);
             let deleteRequest = store.delete(IDBKeyRange.bound(first, endCount, false, false));
             deleteRequest.onsuccess = () => {
               this.throwError(ErrorLevel.unused, 'clean database success');
+              this.cleaning = false;
             };
             deleteRequest.onerror = (e) => {
               this.throwError(ErrorLevel.fatal, 'clean database error', (e.target as any).error);
@@ -250,13 +264,14 @@ export class MPIndexedDB {
         if (result && result.primaryKey) {
           let first = result.primaryKey;
           let range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
-          let keyRange = IDBKeyRange.lowerBound(range);
+          let keyRange = IDBKeyRange.lowerBound(range, true);
           if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
             let keepRequest = store.index('timestamp').openKeyCursor(keyRange);
             keepRequest.onsuccess = (event) => {
               if (event.target && (event.target as any).result) {
                 let end = (event.target as any).result.primaryKey;
-                let deleteRequest = store.delete(IDBKeyRange.bound(first, end, false, false));
+                if (first === end) return;
+                let deleteRequest = store.delete(IDBKeyRange.bound(first, end, false, true));
                 deleteRequest.onsuccess = () => {
                   this.throwError(ErrorLevel.unused, 'keep logs success');
                 };
@@ -297,7 +312,7 @@ export class MPIndexedDB {
       errorMsg = `${errorMsg}:${error.message || error.stack || error.name}`;
       errorStr = error.toString();
     }
-    console.error && console.error(`Mplog: error msg: ${errorMsg}, error detail: ${errorStr}`);
+    // console.error && console.error(`Mplog: error msg: ${errorMsg}, error detail: ${errorStr}`);
     // 可以对内部的错误类型上报
     try {
       if (this.BadJsReport) {
@@ -334,7 +349,7 @@ export class MPIndexedDB {
     try {
       // 如果数据库超过100MB就什么都不做
       if (await getIfCurrentUsageExceed()) {
-        this.isToLarge = true;
+        // this.isToLarge = true;
         this.throwError(ErrorLevel.unused, 'this db size is too large');
         let currentStorage = await getCurrentUsage();
         if (currentStorage && currentStorage > 0) {
@@ -430,10 +445,10 @@ export class MPIndexedDB {
       } catch (e) {
         this.throwError(ErrorLevel.fatal, 'consume pool error', e);
       }
-      if (this.isToLarge) {
-        this.clean();
-        return;
-      }
+      // if (this.isToLarge) {
+      //   this.clean();
+      //   return;
+      // }
       if (!!this.keep7Days) {
         setTimeout(() => { // 1秒后清理默认store的过期数据
           if (this.dbStatus !== DBStatus.INITED) {

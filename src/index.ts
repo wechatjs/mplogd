@@ -67,6 +67,10 @@ export default class Mplogd {
     this.logController.keep(saveDays);
   }
 
+  public clean() {
+    this.logController.clean(); // 还是1/3 删除，防止过大
+  };
+
   private defaultAjaxFilter = ajaxUrl => IgnoreCGIName.indexOf(Util.getLocationCGIName(ajaxUrl)) === -1;
 
   private bindEvent(): void {
