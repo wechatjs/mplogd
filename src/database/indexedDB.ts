@@ -104,7 +104,7 @@ export class MPIndexedDB {
   }
 
   public async insertItems(bufferList: Array<any>) {
-    if (await getCurrentUsage() > 2000) {
+    if (await getCurrentUsage() > 2000000000) {
       this.throwError(ErrorLevel.unused, 'larger than 2000MB');
       this.clean();
       return;
@@ -204,8 +204,9 @@ export class MPIndexedDB {
           let errorCount = store.count();
           errorCount.onsuccess = async () => {
             this.throwError(ErrorLevel.unused, `begin clean no result${errorCount.result}`);
-            if (await getCurrentUsage() < 400) {
+            if (await getCurrentUsage() < 400000000) {
               this.indexedDB.deleteDatabase(this.DB_NAME);
+              this.throwError(ErrorLevel.unused, `delete count0 database`);
             }
           };
         }
@@ -261,13 +262,14 @@ export class MPIndexedDB {
         if (result && result.primaryKey) {
           let first = result.primaryKey;
           let range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
-          let keyRange = IDBKeyRange.lowerBound(range);
+          let keyRange = IDBKeyRange.lowerBound(range, true);
           if (store.indexNames && store.indexNames.length && store.indexNames.contains('timestamp')) {
             let keepRequest = store.index('timestamp').openKeyCursor(keyRange);
             keepRequest.onsuccess = (event) => {
               if (event.target && (event.target as any).result) {
                 let end = (event.target as any).result.primaryKey;
-                let deleteRequest = store.delete(IDBKeyRange.bound(first, end, false, false));
+                if (first === end) return;
+                let deleteRequest = store.delete(IDBKeyRange.bound(first, end, false, true));
                 deleteRequest.onsuccess = () => {
                   this.throwError(ErrorLevel.unused, 'keep logs success');
                 };

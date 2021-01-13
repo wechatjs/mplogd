@@ -262,7 +262,7 @@
                   switch (_a.label) {
                       case 0: return [4 /*yield*/, getCurrentUsage()];
                       case 1:
-                          if ((_a.sent()) > 2000) {
+                          if ((_a.sent()) > 2000000000) {
                               this.throwError(ErrorLevel.unused, 'larger than 2000MB');
                               this.clean();
                               return [2 /*return*/];
@@ -370,8 +370,9 @@
                                               this.throwError(ErrorLevel.unused, "begin clean no result" + errorCount_1.result);
                                               return [4 /*yield*/, getCurrentUsage()];
                                           case 1:
-                                              if ((_a.sent()) < 400) {
+                                              if ((_a.sent()) < 400000000) {
                                                   this.indexedDB.deleteDatabase(this.DB_NAME);
+                                                  this.throwError(ErrorLevel.unused, "delete count0 database");
                                               }
                                               return [2 /*return*/];
                                       }
