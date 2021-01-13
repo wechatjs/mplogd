@@ -482,7 +482,7 @@
               errorMsg = errorMsg + ":" + (error.message || error.stack || error.name);
               errorStr = error.toString();
           }
-          console.error && console.error("Mplog: error msg: " + errorMsg + ", error detail: " + errorStr);
+          // console.error && console.error(`Mplog: error msg: ${errorMsg}, error detail: ${errorStr}`);
           // 可以对内部的错误类型上报
           try {
               if (this.BadJsReport) {
@@ -815,8 +815,9 @@
           this.mpIndexedDB.keep(saveDays);
       };
       LogController.prototype.clean = function () {
+          var _this = this;
           if (this.mpIndexedDB.dbStatus !== DBStatus.INITED) {
-              return this.poolHandler.push(function () { return this.clean(); });
+              return this.poolHandler.push(function () { return _this.clean(); });
           }
           this.mpIndexedDB.clean();
       };

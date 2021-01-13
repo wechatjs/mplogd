@@ -80,12 +80,12 @@ export class LogController {
     this.mpIndexedDB.keep(saveDays);
   }
 
-  public clean(): void{
+  public clean(): void {
     if (this.mpIndexedDB.dbStatus !== DBStatus.INITED) {
-        return this.poolHandler.push(function () { return this.clean(); });
+      return this.poolHandler.push(() => this.clean());
     }
     this.mpIndexedDB.clean();
-};
+  }
 
   private dealLength(logValue: String): String {
     if (typeof this.maxLogSize === 'number' && typeof logValue === 'string' && logValue.length >= this.maxLogSize) {
