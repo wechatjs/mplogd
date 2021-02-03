@@ -207,19 +207,11 @@ export class MPIndexedDB {
     try {
       this.throwError(ErrorLevel.unused, 'begin clean database');
       // 删除1/5的数据
-      if (transaction === null) {
-        this.throwError(ErrorLevel.unused, 'begin clean transaction is none');
-      }
       const store = transaction.objectStore(this.DB_STORE_NAME);
-      if (!store) {
-        this.throwError(ErrorLevel.unused, 'begin clean store is none');
-      }
       let beginRequest = store.openCursor();
       beginRequest.onsuccess = (event) => {
-        this.throwError(ErrorLevel.unused, 'begin clean cursor opened');
         let result = (event.target as any).result;
         if (!result) {
-          this.throwError(ErrorLevel.unused, 'begin clean cursor error no result');
           let errorCount = store.count();
           errorCount.onsuccess = async () => {
             this.throwError(ErrorLevel.unused, `begin clean no result${errorCount.result}`);
@@ -228,18 +220,15 @@ export class MPIndexedDB {
         }
         if (result && result.primaryKey) {
           this.cleaning = true;
-          this.throwError(ErrorLevel.unused, 'begin clean get primary key');
           let first = result.primaryKey;
           let countRequest = store.count();
           countRequest.onsuccess = async () => {
-            this.throwError(ErrorLevel.unused, 'begin clean get count');
             let count = countRequest.result;
             if (count < 50) {
               // await this.delete();
               return;
             }
             let endCount = first + Math.ceil(count / 5);
-            console.log(first, endCount, '------', count);
             let deleteRequest = store.delete(IDBKeyRange.bound(first, endCount, false, false));
             deleteRequest.onsuccess = () => {
               this.throwError(ErrorLevel.unused, 'clean database success');
