@@ -48,27 +48,29 @@
   <button id="btn11">清除日志</button>
   <input type='file' id="fileInput"/>
   <script>
+    console.log(Date.now());
     var logger = new Mplogd();
-    document.getElementById('fileInput').addEventListener('change', function selectedFileChanged() {
-        if (this.files.length === 0) {
-            console.log('请选择文件！');
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = function fileReadCompleted() {
-            let uinList = reader.result.split('\n').join(',');
-            // 当读取完成时，内容只在`reader.result`中
-            console.log(uinList);
-        };
-        reader.readAsText(this.files[0]);
-    });
-    // setInterval(function () {
-    //     for (let i = 0; i < 10000; i++) {
-    //         console.log(i);
-    //         logger.info('这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志');
+    // document.getElementById('fileInput').addEventListener('change', function selectedFileChanged() {
+    //     if (this.files.length === 0) {
+    //         console.log('请选择文件！');
+    //         return;
     //     }
-    // }, 10000);
+
+    //     const reader = new FileReader();
+    //     reader.onload = function fileReadCompleted() {
+    //         let uinList = reader.result.split('\n').join(',');
+    //         // 当读取完成时，内容只在`reader.result`中
+    //         console.log(uinList);
+    //     };
+    //     reader.readAsText(this.files[0]);
+    // });
+    // setInterval(function () {
+    for (let i = 0; i < 100; i++) {
+        // setTimeout(function() {
+            logger.info('这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志这是一条info日志');
+        // });
+    }
+    // }, 1);
     // setInterval(function () {
     //     logger.clean();
     // }, 10000);
