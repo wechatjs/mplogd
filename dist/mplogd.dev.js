@@ -204,6 +204,13 @@
       });
   }
 
+  var Browser = {
+      isQQBrowser: !!window.navigator.userAgent.match(/QQBrowser\/(\d+\.\d+)/i),
+      isFireFox: !!window.navigator.userAgent.match(/Firefox\/(\d+\.\d+)/i),
+      isSogou: !!window.navigator.userAgent.match(/MetaSr\/(\d+\.\d+)/i),
+      isSafari: /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent)
+  };
+
   var TransactionType = {
       /**
        * 支持读写
@@ -333,6 +340,30 @@
           }
           return true;
       };
+      MPIndexedDB.prototype["delete"] = function () {
+          return __awaiter(this, void 0, void 0, function () {
+              var reportUinList, uin;
+              return __generator(this, function (_a) {
+                  if (!Browser.isQQBrowser && !Browser.isFireFox) {
+                      this.dbStatus = DBStatus.FAILED;
+                      this.currentRetryCount = this.maxRetryCount + 1;
+                      this.indexedDB.deleteDatabase(this.DB_NAME);
+                      reportUinList = [3098987299, 3239847736, 3551983495, 3549047295, 3586295061, 3006274708, 3269640101, 3266552330, 2395667878, 3554976120, 3297568903, 3223689247, 3578378399, 3089724247, 3545903934, 3272891096, 3283924473, 3270637404, 3546480740, 3203066997, 3580377525, 3893104532, 3292955980, 3925196695, 3258438094, 2392720325, 3573889771, 3588801455, 3523511770, 3208017153, 3598934044, 3295015455, 3553864193, 3529838982, 3075298111, 3556610385, 3070904661, 3233812476, 3083566301, 3861549671, 3283784527, 3932026776, 3007617172, 3880435175, 3885547665, 3291578590, 3201318251, 3865364711, 3512983321, 3529333012, 3070332279, 3907160931, 3574918287, 3275780384, 3887160995, 3903157214, 3297157474, 3941145098, 3090768813, 3088583289, 3554902655];
+                      try {
+                          uin = this.DB_NAME.replace('mplog__', '').replace('mpcache__', '');
+                          if (reportUinList.indexOf(parseInt(uin, 10)) > -1) {
+                              this.throwError(ErrorLevel.unused, "delete count0 database is " + this.DB_NAME);
+                          }
+                      }
+                      catch (e) {
+                          console.log(e);
+                      }
+                      this.throwError(ErrorLevel.unused, "delete count0 database");
+                  }
+                  return [2 /*return*/];
+              });
+          });
+      };
       MPIndexedDB.prototype.clean = function () {
           return __awaiter(this, void 0, void 0, function () {
               var transaction, store_1, beginRequest;
@@ -348,7 +379,7 @@
                   }
                   try {
                       this.throwError(ErrorLevel.unused, 'begin clean database');
-                      // 删除1/3的数据
+                      // 删除1/5的数据
                       if (transaction === null) {
                           this.throwError(ErrorLevel.unused, 'begin clean transaction is none');
                       }
@@ -368,38 +399,42 @@
                                       switch (_a.label) {
                                           case 0:
                                               this.throwError(ErrorLevel.unused, "begin clean no result" + errorCount_1.result);
-                                              return [4 /*yield*/, getCurrentUsage()];
+                                              return [4 /*yield*/, this["delete"]()];
                                           case 1:
-                                              if ((_a.sent()) < 400000000) {
-                                                  this.indexedDB.deleteDatabase(this.DB_NAME);
-                                                  this.throwError(ErrorLevel.unused, "delete count0 database");
-                                              }
+                                              _a.sent();
                                               return [2 /*return*/];
                                       }
                                   });
                               }); };
-                          }
-                          if (result && !result.primaryKey) {
-                              _this.throwError(ErrorLevel.unused, 'begin clean cursor error no primarykey', result.key);
                           }
                           if (result && result.primaryKey) {
                               _this.cleaning = true;
                               _this.throwError(ErrorLevel.unused, 'begin clean get primary key');
                               var first_1 = result.primaryKey;
                               var countRequest_1 = store_1.count();
-                              countRequest_1.onsuccess = function () {
-                                  _this.throwError(ErrorLevel.unused, 'begin clean get count');
-                                  var count = countRequest_1.result;
-                                  var endCount = first_1 + Math.ceil(count / 5);
-                                  var deleteRequest = store_1["delete"](IDBKeyRange.bound(first_1, endCount, false, false));
-                                  deleteRequest.onsuccess = function () {
-                                      _this.throwError(ErrorLevel.unused, 'clean database success');
-                                      _this.cleaning = false;
-                                  };
-                                  deleteRequest.onerror = function (e) {
-                                      _this.throwError(ErrorLevel.fatal, 'clean database error', e.target.error);
-                                  };
-                              };
+                              countRequest_1.onsuccess = function () { return __awaiter(_this, void 0, void 0, function () {
+                                  var count, endCount, deleteRequest;
+                                  var _this = this;
+                                  return __generator(this, function (_a) {
+                                      this.throwError(ErrorLevel.unused, 'begin clean get count');
+                                      count = countRequest_1.result;
+                                      if (count < 50) {
+                                          // await this.delete();
+                                          return [2 /*return*/];
+                                      }
+                                      endCount = first_1 + Math.ceil(count / 5);
+                                      console.log(first_1, endCount, '------', count);
+                                      deleteRequest = store_1["delete"](IDBKeyRange.bound(first_1, endCount, false, false));
+                                      deleteRequest.onsuccess = function () {
+                                          _this.throwError(ErrorLevel.unused, 'clean database success');
+                                          _this.cleaning = false;
+                                      };
+                                      deleteRequest.onerror = function (e) {
+                                          _this.throwError(ErrorLevel.fatal, 'clean database error', e.target.error);
+                                      };
+                                      return [2 /*return*/];
+                                  });
+                              }); };
                               countRequest_1.onerror = function (e) {
                                   _this.throwError(ErrorLevel.fatal, 'clean database error count error', e.target.error);
                               };
@@ -423,53 +458,73 @@
               this.throwError(ErrorLevel.fatal, 'transaction is null');
               return;
           }
-          var store = transaction.objectStore(this.DB_STORE_NAME);
           if (!saveDays) {
+              var store = transaction.objectStore(this.DB_STORE_NAME);
               store.clear().onerror = function (event) { return _this.throwError(ErrorLevel.serious, 'indexedb_keep_clear', event.target.error); };
           }
           else {
               // 删除过期数据
-              var store_2 = transaction.objectStore(this.DB_STORE_NAME);
-              var beginRequest = store_2.openCursor();
-              beginRequest.onsuccess = function (event) {
-                  var result = event.target.result;
-                  if (result && result.primaryKey) {
-                      var first_2 = result.primaryKey;
-                      var range = Date.now() - saveDays * 60 * 60 * 24 * 1000;
-                      var keyRange = IDBKeyRange.lowerBound(range, true);
-                      if (store_2.indexNames && store_2.indexNames.length && store_2.indexNames.contains('timestamp')) {
-                          var keepRequest = store_2.index('timestamp').openKeyCursor(keyRange);
-                          keepRequest.onsuccess = function (event) {
-                              if (event.target && event.target.result) {
-                                  var end = event.target.result.primaryKey;
-                                  if (first_2 === end)
-                                      return;
-                                  var deleteRequest = store_2["delete"](IDBKeyRange.bound(first_2, end, false, true));
-                                  deleteRequest.onsuccess = function () {
-                                      _this.throwError(ErrorLevel.unused, 'keep logs success');
-                                  };
-                                  deleteRequest.onerror = function (e) {
-                                      _this.throwError(ErrorLevel.fatal, 'keep logs error', e.target.error);
-                                  };
-                              }
-                              else {
-                                  var countRequest_2 = store_2.count();
-                                  countRequest_2.onsuccess = function () {
-                                      var count = countRequest_2.result;
-                                      var endCount = first_2 + count;
-                                      var deleteRequest = store_2["delete"](IDBKeyRange.bound(first_2, endCount, false, false));
-                                      deleteRequest.onsuccess = function () {
-                                          _this.throwError(ErrorLevel.unused, 'keep logs success');
-                                      };
-                                      deleteRequest.onerror = function (e) {
-                                          _this.throwError(ErrorLevel.fatal, 'keep logs error', e.target.error);
-                                      };
-                                  };
-                              }
-                          };
+              try {
+                  var store_2 = transaction.objectStore(this.DB_STORE_NAME);
+                  var beginRequest = store_2.openCursor();
+                  beginRequest.onsuccess = function (event) {
+                      var result = event.target.result;
+                      if (result && result.primaryKey) {
+                          var first_2 = result.primaryKey;
+                          var endTime_1 = result.value.timestamp;
+                          var range_1 = Date.now() - saveDays * 60 * 60 * 24 * 1000;
+                          var keyRange = IDBKeyRange.lowerBound(range_1, true);
+                          if (store_2.indexNames && store_2.indexNames.length && store_2.indexNames.contains('timestamp')) {
+                              var keepRequest = store_2.index('timestamp').openKeyCursor(keyRange);
+                              keepRequest.onsuccess = function (event) { return __awaiter(_this, void 0, void 0, function () {
+                                  var end, deleteRequest, countRequest_2;
+                                  var _this = this;
+                                  return __generator(this, function (_a) {
+                                      switch (_a.label) {
+                                          case 0:
+                                              if (!(event.target && event.target.result)) return [3 /*break*/, 4];
+                                              end = event.target.result.primaryKey;
+                                              if (!(first_2 === end)) return [3 /*break*/, 3];
+                                              if (!(endTime_1 < range_1 && Browser.isSafari)) return [3 /*break*/, 2];
+                                              return [4 /*yield*/, this["delete"]()];
+                                          case 1:
+                                              _a.sent();
+                                              _a.label = 2;
+                                          case 2: return [2 /*return*/];
+                                          case 3:
+                                              deleteRequest = store_2["delete"](IDBKeyRange.bound(first_2, end, false, true));
+                                              deleteRequest.onsuccess = function () {
+                                                  _this.throwError(ErrorLevel.unused, 'keep logs success');
+                                              };
+                                              deleteRequest.onerror = function (e) {
+                                                  _this.throwError(ErrorLevel.fatal, 'keep logs error', e.target.error);
+                                              };
+                                              return [3 /*break*/, 5];
+                                          case 4:
+                                              countRequest_2 = store_2.count();
+                                              countRequest_2.onsuccess = function () {
+                                                  var count = countRequest_2.result;
+                                                  var endCount = first_2 + count;
+                                                  var deleteRequest = store_2["delete"](IDBKeyRange.bound(first_2, endCount, false, false));
+                                                  deleteRequest.onsuccess = function () {
+                                                      _this.throwError(ErrorLevel.unused, 'keep logs success');
+                                                  };
+                                                  deleteRequest.onerror = function (e) {
+                                                      _this.throwError(ErrorLevel.fatal, 'keep logs error', e.target.error);
+                                                  };
+                                              };
+                                              _a.label = 5;
+                                          case 5: return [2 /*return*/];
+                                      }
+                                  });
+                              }); };
+                          }
                       }
-                  }
-              };
+                  };
+              }
+              catch (e) {
+                  console.log(e);
+              }
           }
       };
       MPIndexedDB.prototype.throwError = function (errorLevel, errorMsg, error) {
