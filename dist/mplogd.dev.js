@@ -342,22 +342,11 @@
       };
       MPIndexedDB.prototype["delete"] = function () {
           return __awaiter(this, void 0, void 0, function () {
-              var reportUinList, uin;
               return __generator(this, function (_a) {
                   if (!Browser.isQQBrowser && !Browser.isFireFox) {
                       this.dbStatus = DBStatus.FAILED;
                       this.currentRetryCount = this.maxRetryCount + 1;
                       this.indexedDB.deleteDatabase(this.DB_NAME);
-                      reportUinList = [3098987299, 3239847736, 3551983495, 3549047295, 3586295061, 3006274708, 3269640101, 3266552330, 2395667878, 3554976120, 3297568903, 3223689247, 3578378399, 3089724247, 3545903934, 3272891096, 3283924473, 3270637404, 3546480740, 3203066997, 3580377525, 3893104532, 3292955980, 3925196695, 3258438094, 2392720325, 3573889771, 3588801455, 3523511770, 3208017153, 3598934044, 3295015455, 3553864193, 3529838982, 3075298111, 3556610385, 3070904661, 3233812476, 3083566301, 3861549671, 3283784527, 3932026776, 3007617172, 3880435175, 3885547665, 3291578590, 3201318251, 3865364711, 3512983321, 3529333012, 3070332279, 3907160931, 3574918287, 3275780384, 3887160995, 3903157214, 3297157474, 3941145098, 3090768813, 3088583289, 3554902655];
-                      try {
-                          uin = this.DB_NAME.replace('mplog__', '').replace('mpcache__', '');
-                          if (reportUinList.indexOf(parseInt(uin, 10)) > -1) {
-                              this.throwError(ErrorLevel.unused, "delete count0 database is " + this.DB_NAME);
-                          }
-                      }
-                      catch (e) {
-                          console.log(e);
-                      }
                       this.throwError(ErrorLevel.unused, "delete count0 database");
                   }
                   return [2 /*return*/];
@@ -374,25 +363,14 @@
                   }
                   transaction = this.getTransaction(TransactionType.READ_WRITE);
                   if (transaction === null) {
-                      this.throwError(ErrorLevel.fatal, 'transaction is null');
                       return [2 /*return*/];
                   }
                   try {
-                      this.throwError(ErrorLevel.unused, 'begin clean database');
-                      // 删除1/5的数据
-                      if (transaction === null) {
-                          this.throwError(ErrorLevel.unused, 'begin clean transaction is none');
-                      }
                       store_1 = transaction.objectStore(this.DB_STORE_NAME);
-                      if (!store_1) {
-                          this.throwError(ErrorLevel.unused, 'begin clean store is none');
-                      }
                       beginRequest = store_1.openCursor();
                       beginRequest.onsuccess = function (event) {
-                          _this.throwError(ErrorLevel.unused, 'begin clean cursor opened');
                           var result = event.target.result;
                           if (!result) {
-                              _this.throwError(ErrorLevel.unused, 'begin clean cursor error no result');
                               var errorCount_1 = store_1.count();
                               errorCount_1.onsuccess = function () { return __awaiter(_this, void 0, void 0, function () {
                                   return __generator(this, function (_a) {
@@ -409,21 +387,14 @@
                           }
                           if (result && result.primaryKey) {
                               _this.cleaning = true;
-                              _this.throwError(ErrorLevel.unused, 'begin clean get primary key');
                               var first_1 = result.primaryKey;
                               var countRequest_1 = store_1.count();
                               countRequest_1.onsuccess = function () { return __awaiter(_this, void 0, void 0, function () {
                                   var count, endCount, deleteRequest;
                                   var _this = this;
                                   return __generator(this, function (_a) {
-                                      this.throwError(ErrorLevel.unused, 'begin clean get count');
                                       count = countRequest_1.result;
-                                      if (count < 50) {
-                                          // await this.delete();
-                                          return [2 /*return*/];
-                                      }
                                       endCount = first_1 + Math.ceil(count / 5);
-                                      console.log(first_1, endCount, '------', count);
                                       deleteRequest = store_1["delete"](IDBKeyRange.bound(first_1, endCount, false, false));
                                       deleteRequest.onsuccess = function () {
                                           _this.throwError(ErrorLevel.unused, 'clean database success');
@@ -581,7 +552,6 @@
                           return [4 /*yield*/, getIfCurrentUsageExceed()];
                       case 1:
                           if (!_a.sent()) return [3 /*break*/, 3];
-                          // this.isToLarge = true;
                           this.throwError(ErrorLevel.unused, 'this db size is too large');
                           return [4 /*yield*/, getCurrentUsage()];
                       case 2:
@@ -695,17 +665,13 @@
                       catch (e) {
                           _this.throwError(ErrorLevel.fatal, 'consume pool error', e);
                       }
-                      // if (this.isToLarge) {
-                      //   this.clean();
-                      //   return;
-                      // }
                       if (!!_this.keep7Days) {
                           setTimeout(function () {
                               if (_this.dbStatus !== DBStatus.INITED) {
                                   _this.poolHandler.push(function () { return _this.keep(7); });
                               }
                               else {
-                                  _this.keep(7); // 保留3天数据
+                                  _this.keep(7); // 保留7天数据
                               }
                           }, 1000);
                       }
@@ -834,7 +800,7 @@
               location: location,
               level: level,
               description: description,
-              data: this.dealLength(this.filterFunction(data)),
+              data: this.dealLength(this.formatMsg(data)),
               timestamp: date.getTime(),
           };
           this.bufferLog.push(value);
@@ -885,20 +851,40 @@
           }
           return logValue;
       };
-      LogController.prototype.filterFunction = function (obj) {
-          // 只记录string | number | boolean 类型
+      // 支持string\boolean\number\普通对象
+      LogController.prototype.formatMsg = function (obj) {
+          var msg = '';
           try {
-              if (typeof obj === 'number' || typeof obj === 'boolean') {
-                  return '' + obj;
+              var isSupportType_1 = function (value) {
+                  if (typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' || Object.prototype.toString.call(value) === '[object Object]' || Object.prototype.toString.call(value) === '[object Array]') {
+                      return true;
+                  }
+                  return false;
+              };
+              var replacer = function (key, value) {
+                  if (!isSupportType_1(value)) {
+                      return undefined;
+                  }
+                  return value;
+              };
+              if (obj && isSupportType_1(obj)) {
+                  if (typeof obj === 'string') {
+                      return obj;
+                  }
+                  else if (Object.prototype.toString.call(obj) === '[object FormData]') {
+                      var jsonData_1 = {};
+                      obj.forEach(function (value, key) { return jsonData_1[key] = value; });
+                      return JSON.stringify(jsonData_1);
+                  }
+                  else {
+                      msg = JSON.stringify(obj, replacer);
+                  }
               }
-              else if (typeof obj === 'string') {
-                  return obj;
-              }
-              return '';
           }
           catch (e) {
               console.log(e);
           }
+          return msg;
       };
       return LogController;
   }());
@@ -921,6 +907,8 @@
           this.autoLogRejection = config && typeof config.autoLogRejection !== 'undefined' ? config.autoLogRejection : false;
           // 是否自动记录AJAX请求
           this.autoLogAjax = config && typeof config.autoLogAjax !== 'undefined' ? config.autoLogAjax : false;
+          // 是否自动记录fetch请求
+          this.autoLogFetch = config && typeof config.autoLogFetch !== 'undefined' ? config.autoLogFetch : false;
           this.logAjaxFilter = config && config.logAjaxFilter ? config.logAjaxFilter : this.defaultAjaxFilter;
           this.logController = new LogController(config);
           this.bindEvent();
@@ -965,6 +953,7 @@
               });
           }
           this.ajaxHanler();
+          this.fetchHandler();
           this.saveUnstoreData();
       };
       Mplogd.prototype.ajaxHanler = function () {
@@ -1016,6 +1005,39 @@
                   that_1.xhrSend.apply(this, args);
               };
           }
+      };
+      Mplogd.prototype.fetchHandler = function () {
+          try {
+              if (this.autoLogFetch && window.fetch) {
+                  var originFetch_1 = window.fetch;
+                  var that_2 = this;
+                  Object.defineProperty(window, 'fetch', {
+                      configurable: true,
+                      enumerable: true,
+                      get: function () {
+                          return function (url, options) {
+                              var fetchRequestId = +new Date();
+                              try {
+                                  that_2.info("fetch request id:" + fetchRequestId + " url: " + url, options.body);
+                              }
+                              catch (e) { }
+                              ;
+                              return originFetch_1(url, options).then(function (response) {
+                                  try {
+                                      if (response) {
+                                          that_2.info("fetch response id:" + fetchRequestId + " url: " + url, "status: " + response.status + " statusText " + response.statusText);
+                                      }
+                                  }
+                                  catch (e) { }
+                                  ;
+                                  return response;
+                              });
+                          };
+                      }
+                  });
+              }
+          }
+          catch (e) { }
       };
       Mplogd.prototype.saveUnstoreData = function () {
           var _this = this;

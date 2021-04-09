@@ -40,7 +40,7 @@ export class LogController {
       location, // 页面链接
       level, // 日志等级
       description, // 描述
-      data: this.dealLength(this.filterFunction(data)), // 日志
+      data: this.dealLength(this.formatMsg(data)), // 日志
       timestamp: date.getTime(), // 时间戳，单位毫秒
     };
     this.bufferLog.push(value);
@@ -94,17 +94,35 @@ export class LogController {
     return logValue;
   }
 
-  private filterFunction(obj: any): any {
-    // 只记录string | number | boolean 类型
+  // 支持string\boolean\number\普通对象
+  private formatMsg(obj: any): any {
+    let msg = '';
     try {
-      if (typeof obj === 'number' || typeof obj === 'boolean') {
-        return '' + obj;
-      } else if (typeof obj === 'string') {
-        return obj;
+      let isSupportType = (value) => {
+        if (typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' || Object.prototype.toString.call(value) === '[object Object]' || Object.prototype.toString.call(value) === '[object Array]') {
+          return true;
+        }
+        return false;
       }
-      return '';
-    } catch (e) {
-      console.log(e);
-    }
+      let replacer = (key, value) => {
+        if (!isSupportType(value)) {
+          return undefined;
+        }
+        return value;
+      }
+
+      if (obj && isSupportType(obj)) {
+        if (typeof obj === 'string') {
+          return obj;
+        } else if (Object.prototype.toString.call(obj) === '[object FormData]') {
+          let jsonData = {};
+          obj.forEach((value, key) => jsonData[key] = value);
+          return JSON.stringify(jsonData);
+        } else {
+          msg = JSON.stringify(obj, replacer);
+        }
+      }
+    } catch (e) {console.log(e)};
+    return msg;
   }
 }

@@ -39,3 +39,19 @@ export function getLocationCGIName(location) {
   }
   return CGIName;
 }
+
+export function formatFormData(options) {
+  try {
+    if (options && options.body) {
+      if (Object.prototype.toString.call(options.body) === '[object FormData]') {
+        let jsonData = {};
+        options.body.forEach((value, key) => jsonData[key] = value);
+        return jsonData;
+      } 
+      return options.body;
+    }
+  } catch(e) {
+    return '';
+  }
+  
+}

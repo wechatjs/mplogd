@@ -30,6 +30,7 @@ export interface MplogConfig {
   maxLogSize?: number;
   // 实时上报函数
   reportFunction?: Function | null;
+  autoLogFetch?: boolean;
 }
 
 export const DBStatus  = { //eslint-disable-line
