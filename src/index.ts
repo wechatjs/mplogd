@@ -21,6 +21,8 @@ export default class Mplogd {
 
   private autoLogAjax: boolean;
 
+  private autoLogFetch: boolean;
+
   private logAjaxFilter: Function | null;
 
   constructor(config: MplogConfig) {
@@ -32,6 +34,8 @@ export default class Mplogd {
     this.autoLogRejection = config && typeof config.autoLogRejection !== 'undefined' ? config.autoLogRejection : false;
     // 是否自动记录AJAX请求
     this.autoLogAjax = config && typeof config.autoLogAjax !== 'undefined' ? config.autoLogAjax : false;
+    // 是否自动记录fetch请求
+    this.autoLogFetch = config && typeof config.autoLogFetch !== 'undefined' ? config.autoLogFetch : false;
 
     this.logAjaxFilter = config && config.logAjaxFilter ? config.logAjaxFilter : this.defaultAjaxFilter;
 
@@ -89,6 +93,8 @@ export default class Mplogd {
 
     this.ajaxHanler();
 
+    this.fetchHandler();
+
     this.saveUnstoreData();
   }
 
@@ -136,6 +142,32 @@ export default class Mplogd {
       };
     }
   }
+
+  private fetchHandler(): void {
+    try {
+      if (this.autoLogFetch && window.fetch) {
+        const originFetch = window.fetch;
+        const that = this;
+        Object.defineProperty(window, 'fetch', {
+          configurable: true,
+          enumerable: true,
+          writable: true,
+          get() {
+            return (url, options) => {
+              let fetchRequestId = +new Date();
+              that.info(`fetch request id:${fetchRequestId} url: ${url}`, options.body);
+              return originFetch(url, options).then(response => {
+                if (response) {
+                  that.info(`fetch response id:${fetchRequestId} url: ${url}`, `status: ${response.status} statusText ${response.statusText}`);
+                }
+                return response;
+              })
+            }
+          }
+        })
+      }
+    } catch(e) {}
+  } 
 
   private saveUnstoreData(): void {
     window.addEventListener('beforeunload', () => {

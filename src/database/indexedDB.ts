@@ -76,9 +76,7 @@ export class MPIndexedDB {
   private retryInterval = 10000;
 
   private keep7Days: boolean;
-
-  // private isToLarge: boolean;
-
+  
   private cleaning: boolean;
 
   constructor(config: MplogConfig, poolHandler: PoolHandler) {
@@ -181,15 +179,6 @@ export class MPIndexedDB {
       this.dbStatus = DBStatus.FAILED;
       this.currentRetryCount = this.maxRetryCount + 1;
       this.indexedDB.deleteDatabase(this.DB_NAME);
-      let reportUinList = [3098987299,3239847736,3551983495,3549047295,3586295061,3006274708,3269640101,3266552330,2395667878,3554976120,3297568903,3223689247,3578378399,3089724247,3545903934,3272891096,3283924473,3270637404,3546480740,3203066997,3580377525,3893104532,3292955980,3925196695,3258438094,2392720325,3573889771,3588801455,3523511770,3208017153,3598934044,3295015455,3553864193,3529838982,3075298111,3556610385,3070904661,3233812476,3083566301,3861549671,3283784527,3932026776,3007617172,3880435175,3885547665,3291578590,3201318251,3865364711,3512983321,3529333012,3070332279,3907160931,3574918287,3275780384,3887160995,3903157214,3297157474,3941145098,3090768813,3088583289,3554902655];
-      try {
-        let uin = this.DB_NAME.replace('mplog__', '').replace('mpcache__', '');
-        if (reportUinList.indexOf(parseInt(uin, 10)) > -1) {
-          this.throwError(ErrorLevel.unused, `delete count0 database is ${this.DB_NAME}`);
-        }
-      } catch(e) {
-        console.log(e);
-      }
       this.throwError(ErrorLevel.unused, `delete count0 database`);
     }
   }
@@ -201,11 +190,9 @@ export class MPIndexedDB {
     // indexeddb中当遇到容量大时不能直接deleteDatabase 或者clearStore涉及到
     const transaction = this.getTransaction(TransactionType.READ_WRITE);
     if (transaction === null) {
-      this.throwError(ErrorLevel.fatal, 'transaction is null');
       return;
     }
     try {
-      this.throwError(ErrorLevel.unused, 'begin clean database');
       // 删除1/5的数据
       const store = transaction.objectStore(this.DB_STORE_NAME);
       let beginRequest = store.openCursor();
@@ -224,10 +211,6 @@ export class MPIndexedDB {
           let countRequest = store.count();
           countRequest.onsuccess = async () => {
             let count = countRequest.result;
-            if (count < 50) {
-              // await this.delete();
-              return;
-            }
             let endCount = first + Math.ceil(count / 5);
             let deleteRequest = store.delete(IDBKeyRange.bound(first, endCount, false, false));
             deleteRequest.onsuccess = () => {
@@ -364,7 +347,6 @@ export class MPIndexedDB {
     try {
       // 如果数据库超过100MB就什么都不做
       if (await getIfCurrentUsageExceed()) {
-        // this.isToLarge = true;
         this.throwError(ErrorLevel.unused, 'this db size is too large');
         let currentStorage = await getCurrentUsage();
         if (currentStorage && currentStorage > 0) {
@@ -460,16 +442,12 @@ export class MPIndexedDB {
       } catch (e) {
         this.throwError(ErrorLevel.fatal, 'consume pool error', e);
       }
-      // if (this.isToLarge) {
-      //   this.clean();
-      //   return;
-      // }
       if (!!this.keep7Days) {
         setTimeout(() => { // 1秒后清理默认store的过期数据
           if (this.dbStatus !== DBStatus.INITED) {
             this.poolHandler.push(() => this.keep(7));
           } else {
-            this.keep(7); // 保留3天数据
+            this.keep(7); // 保留7天数据
           }
         }, 1000);
       }
