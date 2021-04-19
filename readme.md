@@ -54,7 +54,7 @@ maxLogSize | 单条日志最大长度 |  3000
 ErrorReport | 错误监控上报 | null
 reportFunction | 实时日志上报 | null
 
-#### 实时使用方式
+#### 扩展配置使用方式
 ```
 // 错误兼容上报
 let ErrorReport = (errorMsg, errorInfo) => {
