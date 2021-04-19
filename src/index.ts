@@ -151,18 +151,15 @@ export default class Mplogd {
         Object.defineProperty(window, 'fetch', {
           configurable: true,
           enumerable: true,
+          writable: true,
           get() {
             return (url, options) => {
               let fetchRequestId = +new Date();
-              try {
-                that.info(`fetch request id:${fetchRequestId} url: ${url}`, options.body);
-              } catch(e) {};
+              that.info(`fetch request id:${fetchRequestId} url: ${url}`, options.body);
               return originFetch(url, options).then(response => {
-                try {
-                  if (response) {
-                    that.info(`fetch response id:${fetchRequestId} url: ${url}`, `status: ${response.status} statusText ${response.statusText}`);
-                  }
-                } catch(e) {};
+                if (response) {
+                  that.info(`fetch response id:${fetchRequestId} url: ${url}`, `status: ${response.status} statusText ${response.statusText}`);
+                }
                 return response;
               })
             }

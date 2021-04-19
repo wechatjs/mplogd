@@ -1014,22 +1014,15 @@
                   Object.defineProperty(window, 'fetch', {
                       configurable: true,
                       enumerable: true,
+                      writable: true,
                       get: function () {
                           return function (url, options) {
                               var fetchRequestId = +new Date();
-                              try {
-                                  that_2.info("fetch request id:" + fetchRequestId + " url: " + url, options.body);
-                              }
-                              catch (e) { }
-                              ;
+                              that_2.info("fetch request id:" + fetchRequestId + " url: " + url, options.body);
                               return originFetch_1(url, options).then(function (response) {
-                                  try {
-                                      if (response) {
-                                          that_2.info("fetch response id:" + fetchRequestId + " url: " + url, "status: " + response.status + " statusText " + response.statusText);
-                                      }
+                                  if (response) {
+                                      that_2.info("fetch response id:" + fetchRequestId + " url: " + url, "status: " + response.status + " statusText " + response.statusText);
                                   }
-                                  catch (e) { }
-                                  ;
                                   return response;
                               });
                           };
