@@ -1,0 +1,36 @@
+{
+  "name": "@tencent/mplogd",
+  "version": "1.0.6",
+  "description": "Mplogd is intended to target user issues by storing opertion logs in indexedDB.",
+  "main": "index.js",
+  "scripts": {
+    "build": "rollup -c",
+    "pub": "npm run build && tnpm publish"
+  },
+  "keywords": [
+    "front-end log",
+    "IndexedDB"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "http://git.code.oa.com/dididong/mplogd.git"
+  },
+  "bugs": {
+    "url": "https://git.code.oa.com/dididong/mplogd/issues"
+  },
+  "author": "dididong",
+  "license": "ISC",
+  "devDependencies": {
+    "@tencent/eslint-config-tencent": "^0.12.2",
+    "@typescript-eslint/eslint-plugin": "^4.7.0",
+    "@typescript-eslint/parser": "^4.7.0",
+    "eslint": "^7.13.0",
+    "rollup": "^1.22.0",
+    "rollup-plugin-json": "^4.0.0",
+    "rollup-plugin-replace": "^2.2.0",
+    "rollup-plugin-typescript2": "^0.24.3",
+    "rollup-plugin-uglify": "^6.0.3",
+    "ts-node": "^8.4.1",
+    "typescript": "^3.6.3"
+  }
+}
