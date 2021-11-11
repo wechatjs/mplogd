@@ -1,8 +1,8 @@
 {
   "name": "@tencent/mplogd",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Mplogd is intended to target user issues by storing opertion logs in indexedDB.",
-  "main": "index.js",
+  "main": "dist/mplogd.js",
   "scripts": {
     "build": "rollup -c",
     "pub": "npm run build && tnpm publish"
